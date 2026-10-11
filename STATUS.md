@@ -23,3 +23,11 @@ Stand 2026-10-11 (nach Release v1). Eigene App fuer Makro-Tracking (Kalorien, Ei
 - Stufe 3: Barcode-Scan (ML Kit, offline), Produktdaten Open Food Facts (Treffer lokal speichern).
 - Health Local: Erhaltungskalorien/Magermasse spaeter automatisch uebernehmen (Schnittstelle wie bei Cadence).
 - Release (Push auf main) nur nach ausdruecklicher Freigabe des Nutzers im Chat. Secret KEYSTORE_B64 muss im Repo gesetzt sein (Nutzer).
+
+## Stand 2026-10-11 (Nacht): Macro 0.3 (Release v5) - Stufe 2 Kochbuch-Rezepte
+- Hinzufuegen hat Reiter Lebensmittel | Kochbuch (ui/Add.kt: PickStep, RecipeList, PortionsStep). Kochbuch-Reiter: Zuletzt gekocht, alle Rezepte, Suche; Portionen waehlen, Werte pro Portion (geschaetzt) aus dem Kochbuch.
+- Vorschlag "Gerade gekocht": Rezept mit cooked_at < 18 h und ohne Eintrag seit dem Kochen; nur Vorschlag, nie automatisch (Nutzerentscheidung).
+- data/KochbuchBridge.kt liest content://de.raphael.kochbuchzuhause.bridge/recipes (Spalten id, title, category, servings, kcal, protein, carbs, fat, cooked_at); Berechtigung de.raphael.kochbuchzuhause.permission.BRIDGE (Signatur). Kochbuch ab 0.75 noetig.
+- Rezept-Eintraege: food_id = RECIPE_FOOD_ID (-1), grams = Portionen (Entry.isPortions), Werte eingefroren. Keine DB-Migration.
+- NICHT am Geraet getestet. Zuerst Kochbuch 0.75, dann Macro 0.3 installieren.
+- Offen: Stufe 1b (Sicherung, Health-Connect-Schreiben), Stufe 3 Barcode, Planer-Anzeige im Kochbuch (Nutzerwunsch, braucht Macro-Ziele per Schnittstelle).
