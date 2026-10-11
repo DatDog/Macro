@@ -27,6 +27,8 @@ data class Settings(
     /** Eiweiß in g je kg, je Fokus */
     val prot: Map<Focus, Float> = Focus.values().associateWith { it.prot },
     val haptics: Boolean = true,
+    /** Gewicht und Erhaltungskalorien aus Health Local übernehmen (wenn verfügbar) */
+    val fromHL: Boolean = true,
 ) {
     fun pctOf(f: Focus = focus): Int = pct[f] ?: f.pct
     fun protOf(f: Focus = focus): Float = prot[f] ?: f.prot
@@ -58,7 +60,24 @@ object Prefs {
             pct = Focus.values().associateWith { sp.getInt("pct_${it.id}", it.pct) },
             prot = Focus.values().associateWith { sp.getFloat("prot_${it.id}", it.prot) },
             haptics = sp.getBoolean("haptics", d.haptics),
+            fromHL = sp.getBoolean("fromHL", d.fromHL),
         )
+    }
+
+    /** Zuletzt von Health Local geholte Werte (damit die Ziele auch ohne Verbindung stehen). */
+    fun loadHl(ctx: Context): HlValues? {
+        val sp = ctx.getSharedPreferences(NAME, Context.MODE_PRIVATE)
+        if (!sp.getBoolean("hl_has", false)) return null
+        fun f(k: String): Float? = if (sp.contains(k)) sp.getFloat(k, 0f) else null
+        return HlValues(f("hl_kg"), f("hl_fat"), f("hl_lean"), f("hl_bmr"), f("hl_tdee"), sp.getString("hl_date", null))
+    }
+
+    fun saveHl(ctx: Context, v: HlValues) {
+        val e = ctx.getSharedPreferences(NAME, Context.MODE_PRIVATE).edit().putBoolean("hl_has", true)
+        fun put(k: String, x: Float?) { if (x != null) e.putFloat(k, x) else e.remove(k) }
+        put("hl_kg", v.weightKg); put("hl_fat", v.fatPct); put("hl_lean", v.leanKg); put("hl_bmr", v.bmr); put("hl_tdee", v.tdee)
+        if (v.date != null) e.putString("hl_date", v.date) else e.remove("hl_date")
+        e.apply()
     }
 
     fun save(ctx: Context, s: Settings) {
@@ -67,6 +86,7 @@ object Prefs {
             .putFloat("weightKg", s.weightKg)
             .putInt("maintenance", s.maintenance)
             .putBoolean("haptics", s.haptics)
+            .putBoolean("fromHL", s.fromHL)
         Focus.values().forEach {
             e.putInt("pct_${it.id}", s.pctOf(it))
             e.putFloat("prot_${it.id}", s.protOf(it))

@@ -110,7 +110,7 @@ private fun Hero(total: Sum, t: Targets?, focus: Focus, onSetup: () -> Unit) {
             T("Ziele einrichten", Ty.Heading)
             Spacer(Modifier.height(8.dp))
             T(
-                "Trage unter „Mehr“ dein Gewicht und deine Erhaltungskalorien ein. Dann zeigt Macro die Ziele für „${focus.label}“.",
+                "Schalte unter „Mehr“ die Übernahme aus Health Local ein oder trage Gewicht und Erhaltungskalorien von Hand ein. Dann zeigt Macro die Ziele für „${focus.label}“.",
                 Ty.Small, C.Muted,
             )
             Spacer(Modifier.height(14.dp))

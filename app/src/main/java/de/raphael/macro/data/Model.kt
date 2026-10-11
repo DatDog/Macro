@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.time.LocalDate
 import java.util.concurrent.Executors
+import kotlin.math.roundToInt
 
 /** Summe von Kalorien und Makros */
 data class Sum(val kcal: Float = 0f, val p: Float = 0f, val c: Float = 0f, val f: Float = 0f) {
@@ -38,11 +39,41 @@ class Model(context: Context) {
         private set
     var today by mutableStateOf(LocalDate.now())
         private set
+    /** Zuletzt von Health Local geholte Werte und Stand der Verbindung */
+    var hl by mutableStateOf(Prefs.loadHl(ctx))
+        private set
+    var hlState by mutableStateOf(HlState.UNKNOWN)
+        private set
 
     fun refreshToday() {
         val n = LocalDate.now()
         if (n != today) today = n
     }
+
+    /** Holt Gewicht und Tagesverbrauch von Health Local (im Hintergrund), wenn die Übernahme an ist. */
+    fun refreshHealthLocal() {
+        if (!settings.fromHL) return
+        io.execute {
+            val r = Bridge.read(ctx)
+            hlState = r.state
+            val v = r.values
+            if (v != null && r.state == HlState.OK) {
+                hl = v
+                Prefs.saveHl(ctx, v)
+            }
+        }
+    }
+
+    /** Einstellungen mit den Werten aus Health Local (wenn an und vorhanden), sonst die von Hand eingetragenen. */
+    val effective: Settings
+        get() {
+            val h = hl
+            if (!settings.fromHL || h == null) return settings
+            return settings.copy(
+                weightKg = h.weightKg ?: settings.weightKg,
+                maintenance = h.tdee?.let { (it / 10f).roundToInt() * 10 } ?: settings.maintenance,
+            )
+        }
 
     fun update(f: (Settings) -> Settings) {
         val s = f(settings)
@@ -50,7 +81,7 @@ class Model(context: Context) {
         io.execute { Prefs.save(ctx, s) }
     }
 
-    val targets: Targets? get() = Prefs.targets(settings)
+    val targets: Targets? get() = Prefs.targets(effective)
 
     fun entriesOf(day: LocalDate): List<Entry> = entries.filter { it.day == day }
 

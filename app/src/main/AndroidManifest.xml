@@ -3,6 +3,12 @@
 
     <!-- Macro nutzt kein Internet und sendet nichts. -->
 
+    <!-- Werte (Gewicht, Tagesverbrauch) lokal von Health Local abholen. Gilt nur, weil beide Apps mit demselben Schlüssel signiert sind. -->
+    <uses-permission android:name="com.example.healthlocal.permission.BRIDGE" />
+    <queries>
+        <provider android:authorities="com.example.healthlocal.bridge" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
