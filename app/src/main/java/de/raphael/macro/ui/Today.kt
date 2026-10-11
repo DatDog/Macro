@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import de.raphael.macro.data.Entry
 import de.raphael.macro.data.Focus
+import de.raphael.macro.data.isPortions
 import de.raphael.macro.data.Model
 import de.raphael.macro.data.Sum
 import de.raphael.macro.data.Targets
@@ -187,7 +188,7 @@ private fun EntryRow(model: Model, e: Entry, open: Boolean, onToggle: () -> Unit
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 T(e.name, Ty.Heading, maxLines = 1)
-                T("$time · ${fmtG(e.grams)} g · ${fmt(e.p)} g Eiweiß", Ty.Small, C.Muted)
+                T("$time · ${amountText(e)} · ${fmt(e.p)} g Eiweiß", Ty.Small, C.Muted)
             }
             Spacer(Modifier.width(10.dp))
             T("${fmt(e.kcal)} kcal", Ty.Body, C.Muted)
@@ -199,7 +200,7 @@ private fun EntryRow(model: Model, e: Entry, open: Boolean, onToggle: () -> Unit
                     "Kohlenhydrate ${fmt(e.c)} g · Fett ${fmt(e.f)} g",
                     Ty.Small, C.Muted, Modifier.padding(bottom = 12.dp),
                 )
-                Field("Menge", g, { g = it }, Modifier.fillMaxWidth(), suffix = "g")
+                Field(if (e.isPortions) "Portionen" else "Menge", g, { g = it }, Modifier.fillMaxWidth(), suffix = if (e.isPortions) "Portionen" else "g")
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     val v = parseNum(g)
@@ -223,3 +224,6 @@ private fun EntryRow(model: Model, e: Entry, open: Boolean, onToggle: () -> Unit
         }
     }
 }
+
+private fun amountText(e: Entry): String =
+    if (e.isPortions) "${fmtG(e.grams)} ${if (e.grams == 1f) "Portion" else "Portionen"}" else "${fmtG(e.grams)} g"

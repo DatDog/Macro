@@ -5,8 +5,11 @@
 
     <!-- Werte (Gewicht, Tagesverbrauch) lokal von Health Local abholen. Gilt nur, weil beide Apps mit demselben Schlüssel signiert sind. -->
     <uses-permission android:name="com.example.healthlocal.permission.BRIDGE" />
+    <!-- Rezepte mit Nährwerten lokal aus dem Kochbuch holen (ebenfalls nur mit gleichem Schlüssel). -->
+    <uses-permission android:name="de.raphael.kochbuchzuhause.permission.BRIDGE" />
     <queries>
         <provider android:authorities="com.example.healthlocal.bridge" />
+        <provider android:authorities="de.raphael.kochbuchzuhause.bridge" />
     </queries>
 
     <application

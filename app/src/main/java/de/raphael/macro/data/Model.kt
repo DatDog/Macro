@@ -15,6 +15,10 @@ data class Sum(val kcal: Float = 0f, val p: Float = 0f, val c: Float = 0f, val f
 
 fun Entry.sum() = Sum(kcal, p, c, f)
 
+/** Einträge aus dem Kochbuch haben keine Lebensmittel-ID, ihre Menge zählt in Portionen statt Gramm. */
+const val RECIPE_FOOD_ID = -1L
+val Entry.isPortions: Boolean get() = foodId == RECIPE_FOOD_ID
+
 /** Werte für eine Menge in Gramm */
 fun Food.sumFor(grams: Float): Sum {
     val k = grams / 100f
@@ -44,6 +48,11 @@ class Model(context: Context) {
         private set
     var hlState by mutableStateOf(HlState.UNKNOWN)
         private set
+    /** Rezepte aus dem Kochbuch (Nährwerte pro Portion) und Stand der Verbindung */
+    var recipes by mutableStateOf<List<KbRecipe>>(emptyList())
+        private set
+    var kbState by mutableStateOf(KbState.UNKNOWN)
+        private set
 
     fun refreshToday() {
         val n = LocalDate.now()
@@ -62,6 +71,26 @@ class Model(context: Context) {
                 Prefs.saveHl(ctx, v)
             }
         }
+    }
+
+    /** Holt die Rezepte aus dem Kochbuch (im Hintergrund). */
+    fun refreshKochbuch() {
+        io.execute {
+            val r = KochbuchBridge.read(ctx)
+            kbState = r.state
+            if (r.state == KbState.OK) recipes = r.recipes
+        }
+    }
+
+    /**
+     * Rezept essen: [portions] Portionen. Der Eintrag bekommt food_id [RECIPE_FOOD_ID], die Menge steht in Portionen.
+     * Werte werden wie bei Lebensmitteln im Moment des Eintrags festgehalten.
+     */
+    fun addRecipe(r: KbRecipe, portions: Float, day: LocalDate = today) {
+        val ts = System.currentTimeMillis()
+        val s = Sum(r.kcal * portions, r.p * portions, r.c * portions, r.f * portions)
+        val id = db.addEntry(day, ts, RECIPE_FOOD_ID, r.title, portions, s.kcal, s.p, s.c, s.f)
+        if (id > 0) entries = entries + Entry(id, day, ts, RECIPE_FOOD_ID, r.title, portions, s.kcal, s.p, s.c, s.f)
     }
 
     /** Einstellungen mit den Werten aus Health Local (wenn an und vorhanden), sonst die von Hand eingetragenen. */

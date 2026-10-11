@@ -15,7 +15,7 @@ android {
         // Bei GitHub wird die Build-Nummer übergeben, damit jedes Update eine höhere Version hat
         val ci = (project.findProperty("ciVersionCode") as String?)?.toIntOrNull()
         versionCode = ci ?: 1
-        versionName = "0.2." + (ci ?: 0)
+        versionName = "0.3." + (ci ?: 0)
     }
 
     // Gleicher Schlüssel wie bei den anderen Apps (Secret KEYSTORE_B64) → Updates ohne Neuinstallation

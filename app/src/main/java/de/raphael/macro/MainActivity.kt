@@ -27,5 +27,6 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         model.refreshToday()
         model.refreshHealthLocal()
+        model.refreshKochbuch()
     }
 }
