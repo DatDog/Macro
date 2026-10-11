@@ -1,0 +1,155 @@
+name: App bauen
+
+on:
+  push:
+    branches: ['**', '!backup']   # Zweige werden nur zur Prüfung gebaut, veröffentlicht wird nur main; backup wird nie gebaut
+  workflow_dispatch:
+
+env:
+  APP_NAME: Macro   # Name der APK-Datei und des Releases
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      # Nur mit deinem Schlüssel signierte Versionen werden veröffentlicht – sonst ließe sich das Update nicht installieren
+      HAS_KEY: ${{ secrets.KEYSTORE_B64 != '' }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+
+      # Schutz vor veralteten Ständen: Ein Push auf main wird nur gebaut und veröffentlicht, wenn er auf dem
+      # zuletzt veröffentlichten Stand aufbaut. Ein alter Chat mit altem Code kann so keine alte Version
+      # als "neueste" veröffentlichen. Absichtlicher Rückschritt: "[rollback]" in die Commit-Nachricht schreiben.
+      - name: Veralteten Stand abfangen
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          LAST=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
+          if [ -z "$LAST" ]; then echo "Noch kein Release, nichts zu prüfen."; exit 0; fi
+          if printf '%s' "$MSG" | grep -qF "[rollback]"; then echo "Absichtlicher Rückschritt ([rollback]), keine Prüfung."; exit 0; fi
+          LASTSHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/$LAST" --jq .sha)
+          if git merge-base --is-ancestor "$LASTSHA" "$GITHUB_SHA"; then
+            echo "Stand baut auf Release $LAST auf."
+          else
+            echo "::error title=Veralteter Stand::Dieser Stand baut nicht auf dem letzten Release ($LAST) auf, vermutlich ein alter Chat. Es wird nichts gebaut oder veröffentlicht. Absicht? Dann [rollback] in die Commit-Nachricht."
+            exit 1
+          fi
+
+      # Auf main: Gibt es zu genau diesem Stand schon einen grünen Bau von einem anderen Zweig (z. B. feat)?
+      # Dann wird dessen APK veröffentlicht, ohne neu zu bauen. Sonst (oder bei jedem Fehler hier) wird normal gebaut.
+      - name: Fertigen Bau von einem Zweig suchen
+        id: reuse
+        if: ${{ github.ref == 'refs/heads/main' }}
+        continue-on-error: true
+        run: |
+          gh run list --workflow "App bauen" --event push --limit 60 \
+            --json databaseId,headSha,headBranch,conclusion,number > runs.json
+          RUN=$(jq -r --arg sha "$GITHUB_SHA" \
+            '[.[] | select(.headSha == $sha and .conclusion == "success" and .headBranch != "main")][0].databaseId // empty' runs.json)
+          if [ -z "$RUN" ]; then echo "Kein fertiger Bau zu diesem Stand, es wird gebaut."; exit 0; fi
+          NUM=$(jq -r --argjson id "$RUN" '.[] | select(.databaseId == $id) | .number' runs.json)
+          # Versionsnummern dürfen nie rückwärts laufen (sonst lässt sich das Update nicht installieren)
+          LAST=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // "v0"' | tr -d 'v')
+          if [ "$NUM" -le "${LAST:-0}" ]; then echo "Bau $NUM ist nicht neuer als Release v$LAST, es wird gebaut."; exit 0; fi
+          mkdir -p reuse
+          gh run download "$RUN" -n "$APP_NAME-$NUM" -D reuse
+          if [ -f "reuse/$APP_NAME.apk" ]; then
+            cp "reuse/$APP_NAME.apk" "$APP_NAME.apk"
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "num=$NUM" >> "$GITHUB_OUTPUT"
+            echo "Bau $NUM wird als Release wiederverwendet, kein neuer Bau."
+          fi
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        if: ${{ steps.reuse.outputs.hit != 'true' }}
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Gradle-Dateien und Abhängigkeiten zwischenspeichern (auch auf Nebenzweigen speichern)
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        if: ${{ steps.reuse.outputs.hit != 'true' }}
+        with:
+          cache-read-only: false
+
+      # Das Android-SDK ist auf den GitHub-Servern vorinstalliert, es fehlt nur Version 36 (wird zwischengespeichert)
+      - name: Android SDK 36 aus dem Zwischenspeicher
+        id: sdkcache
+        if: ${{ steps.reuse.outputs.hit != 'true' }}
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            /usr/local/lib/android/sdk/platforms/android-36
+            /usr/local/lib/android/sdk/build-tools/36.0.0
+          key: android-sdk-36-build-tools-36.0.0
+
+      - name: Android SDK 36 installieren
+        if: ${{ steps.reuse.outputs.hit != 'true' && steps.sdkcache.outputs.cache-hit != 'true' }}
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Signaturschlüssel bereitstellen
+        if: ${{ steps.reuse.outputs.hit != 'true' }}
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > app/ci.keystore
+          fi
+
+      # Meldet als Hinweis am Bau, ob der Schlüssel angekommen ist (nur öffentlicher Fingerabdruck, nie der Schlüssel selbst)
+      - name: Schlüssel prüfen
+        if: ${{ steps.reuse.outputs.hit != 'true' }}
+        run: |
+          if [ -f app/ci.keystore ]; then
+            FP=$(keytool -list -v -keystore app/ci.keystore -storepass android 2>/dev/null | grep -m1 "SHA256:" | sed 's/^ *//')
+            echo "::notice title=Signatur::Schlüssel gefunden. ${FP:-Fingerabdruck nicht lesbar (Datei ungültig?)}"
+          else
+            echo "::notice title=Signatur::Kein Schlüssel (Secret fehlt oder ist leer)"
+          fi
+
+      - name: APK bauen
+        if: ${{ steps.reuse.outputs.hit != 'true' }}
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew assembleRelease -PciVersionCode=$((100 + ${{ github.run_number }})) 2>&1 | tee build.log
+
+      # Fehler als Hinweis am Bau anzeigen (lesbar ohne Log-Download)
+      - name: Fehler zusammenfassen
+        if: ${{ failure() && steps.reuse.outputs.hit != 'true' }}
+        run: |
+          MSG=$( { grep -E "^e: |error:|FAILED" build.log; grep -A12 "What went wrong" build.log; } | grep -v "^> Task .* \(UP-TO-DATE\|NO-SOURCE\|SKIPPED\)$" | head -40 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Baufehler::$MSG"
+
+      - name: APK umbenennen
+        if: ${{ steps.reuse.outputs.hit != 'true' }}
+        run: cp app/build/outputs/apk/release/app-release.apk $APP_NAME.apk
+
+      - name: APK als Download am Bau ablegen
+        if: ${{ steps.reuse.outputs.hit != 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ github.run_number }}
+          path: ${{ env.APP_NAME }}.apk
+
+      # Bei einem wiederverwendeten Bau trägt das Release dessen Nummer (passt zu versionName/versionCode in der APK)
+      - name: Release veröffentlichen
+        if: ${{ env.HAS_KEY == 'true' && github.ref == 'refs/heads/main' }}
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: v${{ steps.reuse.outputs.num || github.run_number }}
+          name: ${{ env.APP_NAME }} ${{ steps.reuse.outputs.num || github.run_number }}
+          body: ${{ github.event.head_commit.message }}
+          files: ${{ env.APP_NAME }}.apk

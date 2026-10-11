@@ -1,0 +1,198 @@
+package de.raphael.macro.ui
+
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
+import de.raphael.macro.data.Focus
+import de.raphael.macro.data.Model
+import kotlin.math.roundToInt
+
+@Composable
+fun MoreScreen(model: Model) {
+    val view = LocalView.current
+    val s = model.settings
+    val t = model.targets
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
+    ) {
+        Spacer(Modifier.height(20.dp))
+        Enter(0) { T("Mehr", Ty.Title) }
+        Spacer(Modifier.height(20.dp))
+
+        Enter(1) {
+            Column {
+                SectionTitle("Fokus")
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Focus.values().forEach { f ->
+                        Chip(f.label, selected = s.focus == f) {
+                            if (s.focus != f) {
+                                if (s.haptics) view.tickOff()
+                                model.update { it.copy(focus = f) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+
+        Enter(2) {
+            Column {
+                SectionTitle("Persönliche Werte")
+                Panel(Modifier.fillMaxWidth()) {
+                    var w by remember { mutableStateOf(if (s.weightKg > 0f) fmtG(s.weightKg) else "") }
+                    var m by remember { mutableStateOf(if (s.maintenance > 0) s.maintenance.toString() else "") }
+                    Field(
+                        "Körpergewicht", w,
+                        { w = it; parseNum(it)?.let { v -> if (v in 30f..300f) model.update { st -> st.copy(weightKg = v) } } },
+                        Modifier.fillMaxWidth(), suffix = "kg",
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Field(
+                        "Erhaltungskalorien pro Tag", m,
+                        { m = it; parseNum(it)?.let { v -> if (v in 1000f..6000f) model.update { st -> st.copy(maintenance = v.roundToInt()) } } },
+                        Modifier.fillMaxWidth(), suffix = "kcal",
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    T(
+                        "Erhaltungskalorien = Kalorien, bei denen dein Gewicht stabil bleibt. In Health Local findest du den Tagesverbrauch im Körper-Tab.",
+                        Ty.Small, C.Muted,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+
+        Enter(3) {
+            Column {
+                SectionTitle("Ziele für „${s.focus.label}“")
+                Panel(Modifier.fillMaxWidth()) {
+                    Stepper(
+                        label = "Kalorien zum Erhalt",
+                        value = (if (s.pctOf() > 0) "+" else "") + s.pctOf() + " %",
+                        onMinus = { model.update { it.copy(pct = it.pct + (it.focus to (it.pctOf() - 5).coerceAtLeast(-30))) } },
+                        onPlus = { model.update { it.copy(pct = it.pct + (it.focus to (it.pctOf() + 5).coerceAtMost(25))) } },
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Stepper(
+                        label = "Eiweiß pro kg Körpergewicht",
+                        value = fmt(s.protOf(), 1) + " g",
+                        onMinus = { model.update { it.copy(prot = it.prot + (it.focus to (((it.protOf() * 10f).roundToInt() - 1) / 10f).coerceAtLeast(1.2f))) } },
+                        onPlus = { model.update { it.copy(prot = it.prot + (it.focus to (((it.protOf() * 10f).roundToInt() + 1) / 10f).coerceAtMost(3.0f))) } },
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    if (t != null) {
+                        T("RESULTIERENDE TAGESZIELE", Ty.Section, C.Muted)
+                        Spacer(Modifier.height(8.dp))
+                        T("${t.kcal} kcal", Ty.Title)
+                        Spacer(Modifier.height(6.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            T("Eiweiß ${t.protein} g", Ty.Body, C.Prot)
+                            T("KH ${t.carbs} g", Ty.Body, C.Carb)
+                            T("Fett ${t.fat} g", Ty.Body, C.Fat)
+                        }
+                    } else {
+                        T("Trage oben Gewicht und Erhaltungskalorien ein, dann erscheinen hier deine Tagesziele.", Ty.Small, C.Muted)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+
+        Enter(4) {
+            Column {
+                SectionTitle("Allgemein")
+                Panel(Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        T("Haptik", Ty.Body, modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = s.haptics,
+                            onCheckedChange = { v -> model.update { it.copy(haptics = v) } },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = C.Accent,
+                                uncheckedThumbColor = C.Muted,
+                                uncheckedTrackColor = C.CardHi,
+                                uncheckedBorderColor = C.Line,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+
+        Enter(5) {
+            Column {
+                SectionTitle("Hinweise")
+                T(
+                    "Macro ist eine Orientierung und keine Ernährungsberatung. Die Startwerte der Lebensmittel sind Richtwerte aus Standardtabellen, bitte gleiche sie mit deiner Packung ab. Alles bleibt auf deinem Handy, Macro nutzt kein Internet.",
+                    Ty.Small, C.Muted, Modifier.padding(horizontal = 4.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+                T(
+                    "Version 0.1 (Stufe 1). Noch nicht dabei: Sicherung, Health Connect, Kochbuch-Rezepte, Barcode.",
+                    Ty.Small, C.Muted, Modifier.padding(horizontal = 4.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun Stepper(label: String, value: String, onMinus: () -> Unit, onPlus: () -> Unit) {
+    val view = LocalView.current
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            T(label, Ty.Small, C.Muted)
+            T(value, Ty.Heading)
+        }
+        StepButton("−") { view.tickOff(); onMinus() }
+        Spacer(Modifier.size(8.dp))
+        StepButton("+") { view.tickOn(); onPlus() }
+    }
+}
+
+@Composable
+private fun StepButton(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(44.dp)
+            .pressable(onClick)
+            .clip(RoundedCornerShape(14.dp))
+            .background(C.CardHi),
+        contentAlignment = Alignment.Center,
+    ) { T(label, Ty.Heading) }
+}
