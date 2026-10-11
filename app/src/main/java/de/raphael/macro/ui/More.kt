@@ -214,7 +214,7 @@ fun MoreScreen(model: Model) {
                 )
                 Spacer(Modifier.height(10.dp))
                 T(
-                    "Version 0.3 (Stufe 2). Neu: Rezepte aus dem Kochbuch. Noch nicht dabei: Sicherung, Health Connect, Barcode.",
+                    "Version 0.4 (Stufe 2). Neu: Rezepte aus dem Kochbuch. Noch nicht dabei: Sicherung, Health Connect, Barcode.",
                     Ty.Small, C.Muted, Modifier.padding(horizontal = 4.dp),
                 )
             }

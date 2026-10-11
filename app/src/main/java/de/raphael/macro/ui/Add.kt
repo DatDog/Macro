@@ -126,11 +126,11 @@ private fun PickStep(
     var query by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf(0) }
     val q = query.trim().lowercase()
-    // Frisch gekocht (letzte 18 Stunden) und heute noch nicht eingetragen → Vorschlag, nie automatisch
+    // Gekocht in den letzten 3 Tagen und noch Portionen übrig → Vorschlag, nie automatisch
     val now = System.currentTimeMillis()
     val fresh = model.recipes
-        .filter { it.cookedAt > 0L && now - it.cookedAt < 18 * 3600 * 1000L }
-        .filter { r -> model.entries.none { it.isPortions && it.name == r.title && it.ts >= r.cookedAt } }
+        .filter { it.cookedAt > 0L && now - it.cookedAt < 3 * 24 * 3600 * 1000L }
+        .filter { model.leftOf(it) > 0f }
         .maxByOrNull { it.cookedAt }
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         TopRow("Hinzufügen", "Schließen", onClose)
@@ -144,6 +144,7 @@ private fun PickStep(
                 T("GERADE GEKOCHT", Ty.Section, C.Mint)
                 Spacer(Modifier.height(4.dp))
                 T(fresh.title, Ty.Heading, maxLines = 1)
+                T(portionLine(model, fresh), Ty.Small, C.Muted)
                 T("${fmt(fresh.kcal)} kcal pro Portion · Tippen zum Eintragen", Ty.Small, C.Muted)
             }
             Spacer(Modifier.height(12.dp))
@@ -198,27 +199,28 @@ private fun RecipeList(model: Model, q: String, onRecipe: (KbRecipe) -> Unit) {
             if (q.isNotEmpty()) {
                 val hits = model.recipes.filter { it.title.lowercase().contains(q) || it.category.lowercase().contains(q) }
                 if (hits.isEmpty()) T("Kein Rezept gefunden.", Ty.Body, C.Muted, Modifier.padding(start = 4.dp))
-                hits.forEach { RecipeRow(it, onRecipe) }
+                hits.forEach { RecipeRow(model, it, false, onRecipe) }
             } else {
                 val cooked = model.recipes.filter { it.cookedAt > 0L }.sortedByDescending { it.cookedAt }.take(8)
                 if (cooked.isNotEmpty()) {
                     SectionTitle("Zuletzt gekocht")
-                    cooked.forEach { RecipeRow(it, onRecipe) }
+                    cooked.forEach { RecipeRow(model, it, true, onRecipe) }
                     Spacer(Modifier.height(14.dp))
                 }
                 SectionTitle("Alle Rezepte")
-                model.recipes.forEach { RecipeRow(it, onRecipe) }
+                model.recipes.forEach { RecipeRow(model, it, false, onRecipe) }
             }
         }
     }
 }
 
 @Composable
-private fun RecipeRow(r: KbRecipe, onRecipe: (KbRecipe) -> Unit) {
+private fun RecipeRow(model: Model, r: KbRecipe, showCooked: Boolean, onRecipe: (KbRecipe) -> Unit) {
     Box(Modifier.padding(bottom = 8.dp)) {
         Panel(onClick = { onRecipe(r) }) {
             T(r.title, Ty.Heading, maxLines = 1)
             T("${fmt(r.kcal)} kcal · ${fmtG(r.p)} g Eiweiß pro Portion", Ty.Small, C.Muted, maxLines = 1)
+            if (showCooked && r.cookedAt > 0L) T(portionLine(model, r), Ty.Small, C.Mint, maxLines = 1)
         }
     }
 }
@@ -239,6 +241,7 @@ private fun PortionsStep(model: Model, r: KbRecipe, onBack: () -> Unit, onDone: 
     ) {
         TopRow(r.title, "Zurück", onBack)
         T("Werte pro Portion, vom Kochbuch geschätzt. Das Rezept ergibt ${r.servings} Portionen.", Ty.Small, C.Muted)
+        if (r.cookedAt > 0L) T(portionLine(model, r), Ty.Small, C.Mint)
         Spacer(Modifier.height(18.dp))
         Field("Portionen", n, { n = it }, Modifier.fillMaxWidth(), suffix = "Portionen")
         Spacer(Modifier.height(12.dp))
@@ -422,4 +425,20 @@ private fun FormStep(model: Model, food: Food?, onBack: () -> Unit, onSaved: (Lo
         }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+/** "4 gekocht · 1 gegessen · 3 übrig", dazu wann gekocht wurde. */
+private fun portionLine(model: Model, r: KbRecipe): String {
+    val cooked = model.cookedOf(r)
+    val eaten = model.eatenOf(r)
+    val left = model.leftOf(r)
+    val ago = System.currentTimeMillis() - r.cookedAt
+    val whenText = when {
+        ago < 3600_000L -> "gerade eben"
+        ago < 24 * 3600_000L -> "vor ${ago / 3600_000L} h"
+        else -> "vor ${ago / (24 * 3600_000L)} Tagen"
+    }
+    // Nach 3 Tagen zählen wir keine Reste mehr, dann nur noch "zuletzt gekocht"
+    if (ago >= 3 * 24 * 3600_000L) return "Zuletzt $whenText gekocht"
+    return "$cooked ${if (cooked == 1) "Portion" else "Portionen"} gekocht ($whenText) · ${fmtG(eaten)} gegessen · ${fmtG(left)} übrig"
 }

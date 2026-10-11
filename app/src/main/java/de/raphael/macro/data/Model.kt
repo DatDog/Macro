@@ -73,6 +73,17 @@ class Model(context: Context) {
         }
     }
 
+    /** Seit dem letzten Kochen von diesem Rezept gegessene Portionen (Summe der Einträge). */
+    fun eatenOf(r: KbRecipe): Float =
+        if (r.cookedAt <= 0L) 0f
+        else entries.filter { it.isPortions && it.name == r.title && it.ts >= r.cookedAt }.sumOf { it.grams.toDouble() }.toFloat()
+
+    /** Gekochte Portionen (beim Kochen gewählt, sonst die des Rezepts). */
+    fun cookedOf(r: KbRecipe): Int = if (r.cookedServings > 0) r.cookedServings else r.servings
+
+    /** Noch übrige Portionen vom letzten Kochen, nie unter 0. */
+    fun leftOf(r: KbRecipe): Float = (cookedOf(r) - eatenOf(r)).coerceAtLeast(0f)
+
     /** Holt die Rezepte aus dem Kochbuch (im Hintergrund). */
     fun refreshKochbuch() {
         io.execute {
