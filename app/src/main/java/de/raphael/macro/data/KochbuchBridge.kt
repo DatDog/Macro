@@ -16,6 +16,8 @@ data class KbRecipe(
     val cookedAt: Long,
     /** Portionen, die beim letzten Kochen gewählt waren */
     val cookedServings: Int,
+    /** Nährwerte pro Portion des letzten Kochens (bei eigener Portionszahl umgerechnet, sonst wie oben), null = nicht bekannt */
+    val cook: Sum? = null,
 )
 
 enum class KbState { UNKNOWN, OK, EMPTY, NO_APP, DENIED }
@@ -39,6 +41,8 @@ object KochbuchBridge {
                 val iK = it.getColumnIndex("kcal"); val iP = it.getColumnIndex("protein")
                 val iC = it.getColumnIndex("carbs"); val iF = it.getColumnIndex("fat")
                 val iCo = it.getColumnIndex("cooked_at"); val iCs = it.getColumnIndex("cooked_servings")
+                val iCk = it.getColumnIndex("cook_kcal"); val iCp = it.getColumnIndex("cook_protein")
+                val iCc = it.getColumnIndex("cook_carbs"); val iCf = it.getColumnIndex("cook_fat")
                 if (iId < 0 || iTitle < 0 || iK < 0) return KbResult(KbState.NO_APP)
                 while (it.moveToNext()) {
                     out.add(
@@ -50,6 +54,8 @@ object KochbuchBridge {
                             c = if (iC >= 0) it.getFloat(iC) else 0f, f = if (iF >= 0) it.getFloat(iF) else 0f,
                             cookedAt = if (iCo >= 0) it.getLong(iCo) else 0L,
                             cookedServings = if (iCs >= 0) it.getInt(iCs) else 0,
+                            cook = if (iCk >= 0 && iCp >= 0 && iCc >= 0 && iCf >= 0 && !it.isNull(iCk))
+                                Sum(it.getFloat(iCk), it.getFloat(iCp), it.getFloat(iCc), it.getFloat(iCf)) else null,
                         )
                     )
                 }

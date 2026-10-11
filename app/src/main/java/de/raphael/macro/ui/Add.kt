@@ -145,7 +145,7 @@ private fun PickStep(
                 Spacer(Modifier.height(4.dp))
                 T(fresh.title, Ty.Heading, maxLines = 1)
                 T(portionLine(model, fresh), Ty.Small, C.Muted)
-                T("${fmt(fresh.kcal)} kcal pro Portion · Tippen zum Eintragen", Ty.Small, C.Muted)
+                T("${fmt(model.perPortion(fresh).kcal)} kcal pro Portion · Tippen zum Eintragen", Ty.Small, C.Muted)
             }
             Spacer(Modifier.height(12.dp))
         }
@@ -219,7 +219,8 @@ private fun RecipeRow(model: Model, r: KbRecipe, showCooked: Boolean, onRecipe: 
     Box(Modifier.padding(bottom = 8.dp)) {
         Panel(onClick = { onRecipe(r) }) {
             T(r.title, Ty.Heading, maxLines = 1)
-            T("${fmt(r.kcal)} kcal · ${fmtG(r.p)} g Eiweiß pro Portion", Ty.Small, C.Muted, maxLines = 1)
+            val pp = model.perPortion(r)
+            T("${fmt(pp.kcal)} kcal · ${fmtG(pp.p)} g Eiweiß pro Portion", Ty.Small, C.Muted, maxLines = 1)
             if (showCooked && r.cookedAt > 0L) T(portionLine(model, r), Ty.Small, C.Mint, maxLines = 1)
         }
     }
@@ -233,6 +234,7 @@ private fun PortionsStep(model: Model, r: KbRecipe, onBack: () -> Unit, onDone: 
     val ok = portions != null && portions > 0f && portions <= 20f
     val k = if (ok) portions!! else 0f
 
+    val pp = model.perPortion(r)
     Column(
         Modifier
             .fillMaxSize()
@@ -240,7 +242,11 @@ private fun PortionsStep(model: Model, r: KbRecipe, onBack: () -> Unit, onDone: 
             .padding(horizontal = 20.dp)
     ) {
         TopRow(r.title, "Zurück", onBack)
-        T("Werte pro Portion, vom Kochbuch geschätzt. Das Rezept ergibt ${r.servings} Portionen.", Ty.Small, C.Muted)
+        T(
+            if (pp.kcal != r.kcal) "Werte pro Portion für deine ${model.cookedOf(r)} Portionen (im Kochbuch umgerechnet, geschätzt). Das Rezept ergibt ${r.servings} Portionen."
+            else "Werte pro Portion, vom Kochbuch geschätzt. Das Rezept ergibt ${r.servings} Portionen.",
+            Ty.Small, C.Muted,
+        )
         if (r.cookedAt > 0L) T(portionLine(model, r), Ty.Small, C.Mint)
         Spacer(Modifier.height(18.dp))
         Field("Portionen", n, { n = it }, Modifier.fillMaxWidth(), suffix = "Portionen")
@@ -250,12 +256,12 @@ private fun PortionsStep(model: Model, r: KbRecipe, onBack: () -> Unit, onDone: 
         }
         Spacer(Modifier.height(20.dp))
         Panel {
-            T(if (ok) "${fmt(r.kcal * k)} kcal" else "–", Ty.Title)
+            T(if (ok) "${fmt(pp.kcal * k)} kcal" else "–", Ty.Title)
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                T("Eiweiß ${if (ok) fmt(r.p * k, 1) else "–"} g", Ty.Body, C.Prot)
-                T("KH ${if (ok) fmt(r.c * k, 1) else "–"} g", Ty.Body, C.Carb)
-                T("Fett ${if (ok) fmt(r.f * k, 1) else "–"} g", Ty.Body, C.Fat)
+                T("Eiweiß ${if (ok) fmt(pp.p * k, 1) else "–"} g", Ty.Body, C.Prot)
+                T("KH ${if (ok) fmt(pp.c * k, 1) else "–"} g", Ty.Body, C.Carb)
+                T("Fett ${if (ok) fmt(pp.f * k, 1) else "–"} g", Ty.Body, C.Fat)
             }
         }
         Spacer(Modifier.height(20.dp))

@@ -78,6 +78,15 @@ class Model(context: Context) {
         if (r.cookedAt <= 0L) 0f
         else entries.filter { it.isPortions && it.name == r.title && it.ts >= r.cookedAt }.sumOf { it.grams.toDouble() }.toFloat()
 
+    /**
+     * Nährwerte pro Portion. In den 3 Tagen nach dem Kochen gelten die Werte des letzten Kochens
+     * (bei eigener Portionszahl umgerechnet, z. B. größere Wraps), sonst die Standardwerte des Rezepts.
+     */
+    fun perPortion(r: KbRecipe): Sum {
+        val recent = r.cookedAt > 0L && System.currentTimeMillis() - r.cookedAt < 3 * 24 * 3600_000L
+        return (if (recent) r.cook else null) ?: Sum(r.kcal, r.p, r.c, r.f)
+    }
+
     /** Gekochte Portionen (beim Kochen gewählt, sonst die des Rezepts). */
     fun cookedOf(r: KbRecipe): Int = if (r.cookedServings > 0) r.cookedServings else r.servings
 
@@ -99,7 +108,8 @@ class Model(context: Context) {
      */
     fun addRecipe(r: KbRecipe, portions: Float, day: LocalDate = today) {
         val ts = System.currentTimeMillis()
-        val s = Sum(r.kcal * portions, r.p * portions, r.c * portions, r.f * portions)
+        val pp = perPortion(r)
+        val s = Sum(pp.kcal * portions, pp.p * portions, pp.c * portions, pp.f * portions)
         val id = db.addEntry(day, ts, RECIPE_FOOD_ID, r.title, portions, s.kcal, s.p, s.c, s.f)
         if (id > 0) entries = entries + Entry(id, day, ts, RECIPE_FOOD_ID, r.title, portions, s.kcal, s.p, s.c, s.f)
     }
