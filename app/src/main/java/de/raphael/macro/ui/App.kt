@@ -92,7 +92,7 @@ fun MacroApp(model: Model) {
                     else -> MoreScreen(model)
                 }
             }
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = adding,
                 enter = slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(240)),
                 exit = slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it / 3 } + fadeOut(tween(180)),
