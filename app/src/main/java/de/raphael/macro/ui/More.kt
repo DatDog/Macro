@@ -29,7 +29,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import de.raphael.macro.data.Focus
+import de.raphael.macro.data.HlState
 import de.raphael.macro.data.Model
 import kotlin.math.roundToInt
 
@@ -71,22 +73,72 @@ fun MoreScreen(model: Model) {
             Column {
                 SectionTitle("Persönliche Werte")
                 Panel(Modifier.fillMaxWidth()) {
+                    val h = model.hl
+                    val hlWeight = if (s.fromHL) h?.weightKg else null
+                    val hlTdee = if (s.fromHL) h?.tdee else null
                     var w by remember { mutableStateOf(if (s.weightKg > 0f) fmtG(s.weightKg) else "") }
                     var m by remember { mutableStateOf(if (s.maintenance > 0) s.maintenance.toString() else "") }
-                    Field(
-                        "Körpergewicht", w,
-                        { w = it; parseNum(it)?.let { v -> if (v in 30f..300f) model.update { st -> st.copy(weightKg = v) } } },
-                        Modifier.fillMaxWidth(), suffix = "kg",
-                    )
+
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            T("Aus Health Local übernehmen", Ty.Body)
+                            T("Gewicht und geschätzter Tagesverbrauch, nur auf dem Gerät", Ty.Small, C.Muted)
+                        }
+                        Switch(
+                            checked = s.fromHL,
+                            onCheckedChange = { v ->
+                                model.update { it.copy(fromHL = v) }
+                                if (v) model.refreshHealthLocal()
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = C.Accent,
+                                uncheckedThumbColor = C.Muted,
+                                uncheckedTrackColor = C.CardHi,
+                                uncheckedBorderColor = C.Line,
+                            ),
+                        )
+                    }
+                    if (s.fromHL) {
+                        Spacer(Modifier.height(6.dp))
+                        T(
+                            when (model.hlState) {
+                                HlState.OK -> "Verbunden" + (h?.date?.let { ", Gewicht vom $it" } ?: "") + "."
+                                HlState.EMPTY -> "Health Local hat noch kein Gewicht. Bitte dort zuerst synchronisieren."
+                                HlState.NO_APP -> "Health Local nicht gefunden oder zu alt (ab Version 0.22 nötig)."
+                                HlState.DENIED -> "Keine Berechtigung. Beide Apps müssen mit demselben Schlüssel signiert sein."
+                                HlState.UNKNOWN -> if (h != null) "Zuletzt geholte Werte." else "Noch nicht abgefragt."
+                            },
+                            Ty.Small, if (model.hlState == HlState.OK) C.Mint else C.Fat,
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+
+                    if (hlWeight != null) {
+                        ValueRow("Körpergewicht", "${fmt(hlWeight, 1)} kg", "aus Health Local")
+                    } else {
+                        Field(
+                            "Körpergewicht", w,
+                            { w = it; parseNum(it)?.let { v -> if (v in 30f..300f) model.update { st -> st.copy(weightKg = v) } } },
+                            Modifier.fillMaxWidth(), suffix = "kg",
+                        )
+                    }
                     Spacer(Modifier.height(10.dp))
-                    Field(
-                        "Erhaltungskalorien pro Tag", m,
-                        { m = it; parseNum(it)?.let { v -> if (v in 1000f..6000f) model.update { st -> st.copy(maintenance = v.roundToInt()) } } },
-                        Modifier.fillMaxWidth(), suffix = "kcal",
-                    )
+                    if (hlTdee != null) {
+                        ValueRow("Erhaltungskalorien", "${model.effective.maintenance} kcal", "aus Health Local, geschätzt (±10 %)")
+                    } else {
+                        Field(
+                            "Erhaltungskalorien pro Tag", m,
+                            { m = it; parseNum(it)?.let { v -> if (v in 1000f..6000f) model.update { st -> st.copy(maintenance = v.roundToInt()) } } },
+                            Modifier.fillMaxWidth(), suffix = "kcal",
+                        )
+                    }
                     Spacer(Modifier.height(10.dp))
                     T(
-                        "Erhaltungskalorien = Kalorien, bei denen dein Gewicht stabil bleibt. In Health Local findest du den Tagesverbrauch im Körper-Tab.",
+                        if (s.fromHL && model.hlState == HlState.OK && hlTdee == null)
+                            "Health Local kann den Tagesverbrauch noch nicht berechnen (braucht Grundumsatz und mindestens 4 Tage Aktivitätsdaten). Bitte trage die Erhaltungskalorien vorerst von Hand ein."
+                        else
+                            "Erhaltungskalorien = Kalorien, bei denen dein Gewicht stabil bleibt. Die Schätzung aus Health Local kann um etwa 10 % danebenliegen. Prüfe sie nach 2 bis 3 Wochen am Gewichtstrend.",
                         Ty.Small, C.Muted,
                     )
                 }
@@ -162,7 +214,7 @@ fun MoreScreen(model: Model) {
                 )
                 Spacer(Modifier.height(10.dp))
                 T(
-                    "Version 0.1 (Stufe 1). Noch nicht dabei: Sicherung, Health Connect, Kochbuch-Rezepte, Barcode.",
+                    "Version 0.4 (Stufe 2). Neu: Rezepte aus dem Kochbuch. Noch nicht dabei: Sicherung, Health Connect, Barcode.",
                     Ty.Small, C.Muted, Modifier.padding(horizontal = 4.dp),
                 )
             }
@@ -195,4 +247,13 @@ private fun StepButton(label: String, onClick: () -> Unit) {
             .background(C.CardHi),
         contentAlignment = Alignment.Center,
     ) { T(label, Ty.Heading) }
+}
+
+@Composable
+private fun ValueRow(label: String, value: String, note: String) {
+    Column(Modifier.fillMaxWidth()) {
+        T(label, Ty.Small, C.Muted)
+        T(value, Ty.Title.copy(fontSize = 26.sp))
+        T(note, Ty.Label, C.Muted)
+    }
 }

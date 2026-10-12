@@ -34,7 +34,10 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.raphael.macro.data.Food
+import de.raphael.macro.data.KbRecipe
+import de.raphael.macro.data.KbState
 import de.raphael.macro.data.Model
+import de.raphael.macro.data.isPortions
 import de.raphael.macro.data.sumFor
 import kotlin.math.abs
 
@@ -42,6 +45,7 @@ import kotlin.math.abs
 private sealed interface Step {
     data object Pick : Step
     data class Amount(val foodId: Long) : Step
+    data class Portions(val recipeId: String) : Step
     data class Form(val foodId: Long?) : Step
 }
 
@@ -63,7 +67,20 @@ fun AddScreen(model: Model, onClose: () -> Unit) {
             label = "addStep",
         ) { st ->
             when (st) {
-                is Step.Pick -> PickStep(model, onClose, onPick = { step = Step.Amount(it.id) }, onNew = { step = Step.Form(null) })
+                is Step.Pick -> PickStep(
+                    model, onClose,
+                    onPick = { step = Step.Amount(it.id) },
+                    onNew = { step = Step.Form(null) },
+                    onRecipe = { step = Step.Portions(it.id) },
+                )
+                is Step.Portions -> {
+                    val r = model.recipes.firstOrNull { it.id == st.recipeId }
+                    if (r != null) {
+                        PortionsStep(model, r, onBack = { step = Step.Pick }, onDone = onClose)
+                    } else {
+                        LaunchedEffect(Unit) { step = Step.Pick }
+                    }
+                }
                 is Step.Amount -> {
                     val food = model.foodById(st.foodId)
                     if (food != null) {
@@ -102,12 +119,36 @@ private fun TopRow(title: String, backLabel: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun PickStep(model: Model, onClose: () -> Unit, onPick: (Food) -> Unit, onNew: () -> Unit) {
+private fun PickStep(
+    model: Model, onClose: () -> Unit, onPick: (Food) -> Unit, onNew: () -> Unit, onRecipe: (KbRecipe) -> Unit,
+) {
     val view = LocalView.current
     var query by remember { mutableStateOf("") }
+    var tab by remember { mutableStateOf(0) }
     val q = query.trim().lowercase()
+    // Gekocht in den letzten 3 Tagen und noch Portionen übrig → Vorschlag, nie automatisch
+    val now = System.currentTimeMillis()
+    val fresh = model.recipes
+        .filter { it.cookedAt > 0L && now - it.cookedAt < 3 * 24 * 3600 * 1000L }
+        .filter { model.leftOf(it) > 0f }
+        .maxByOrNull { it.cookedAt }
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         TopRow("Hinzufügen", "Schließen", onClose)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip("Lebensmittel", selected = tab == 0) { tab = 0 }
+            Chip("Kochbuch", selected = tab == 1) { tab = 1 }
+        }
+        Spacer(Modifier.height(12.dp))
+        if (fresh != null) {
+            Panel(Modifier.fillMaxWidth(), onClick = { onRecipe(fresh) }) {
+                T("GERADE GEKOCHT", Ty.Section, C.Mint)
+                Spacer(Modifier.height(4.dp))
+                T(fresh.title, Ty.Heading, maxLines = 1)
+                T(portionLine(model, fresh), Ty.Small, C.Muted)
+                T("${fmt(model.perPortion(fresh).kcal)} kcal pro Portion · Tippen zum Eintragen", Ty.Small, C.Muted)
+            }
+            Spacer(Modifier.height(12.dp))
+        }
         Field("Suchen", query, { query = it }, Modifier.fillMaxWidth(), number = false)
         Spacer(Modifier.height(14.dp))
         Column(
@@ -115,7 +156,9 @@ private fun PickStep(model: Model, onClose: () -> Unit, onPick: (Food) -> Unit, 
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
         ) {
-            if (q.isNotEmpty()) {
+            if (tab == 1) {
+                RecipeList(model, q, onRecipe)
+            } else if (q.isNotEmpty()) {
                 val hits = model.foods.filter { it.name.lowercase().contains(q) }
                 if (hits.isEmpty()) T("Nichts gefunden. Lege das Lebensmittel neu an.", Ty.Body, C.Muted, Modifier.padding(start = 4.dp))
                 hits.forEach { FoodRow(model, it, view, onPick) }
@@ -137,9 +180,99 @@ private fun PickStep(model: Model, onClose: () -> Unit, onPick: (Food) -> Unit, 
             }
             Spacer(Modifier.height(12.dp))
         }
-        Spacer(Modifier.height(10.dp))
-        BigButton("Neues Lebensmittel", color = C.CardHi, onClick = onNew)
+        if (tab == 0) {
+            Spacer(Modifier.height(10.dp))
+            BigButton("Neues Lebensmittel", color = C.CardHi, onClick = onNew)
+        }
         Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun RecipeList(model: Model, q: String, onRecipe: (KbRecipe) -> Unit) {
+    when (model.kbState) {
+        KbState.NO_APP -> T("Kochbuch nicht gefunden oder zu alt. Installiere die neueste Version des Kochbuchs.", Ty.Body, C.Muted, Modifier.padding(start = 4.dp))
+        KbState.DENIED -> T("Keine Berechtigung. Beide Apps müssen mit demselben Schlüssel signiert sein.", Ty.Body, C.Fat, Modifier.padding(start = 4.dp))
+        KbState.EMPTY -> T("Das Kochbuch hat noch keine Rezepte mit Nährwerten.", Ty.Body, C.Muted, Modifier.padding(start = 4.dp))
+        KbState.UNKNOWN -> T("Lade Rezepte …", Ty.Body, C.Muted, Modifier.padding(start = 4.dp))
+        KbState.OK -> {
+            if (q.isNotEmpty()) {
+                val hits = model.recipes.filter { it.title.lowercase().contains(q) || it.category.lowercase().contains(q) }
+                if (hits.isEmpty()) T("Kein Rezept gefunden.", Ty.Body, C.Muted, Modifier.padding(start = 4.dp))
+                hits.forEach { RecipeRow(model, it, false, onRecipe) }
+            } else {
+                val cooked = model.recipes.filter { it.cookedAt > 0L }.sortedByDescending { it.cookedAt }.take(8)
+                if (cooked.isNotEmpty()) {
+                    SectionTitle("Zuletzt gekocht")
+                    cooked.forEach { RecipeRow(model, it, true, onRecipe) }
+                    Spacer(Modifier.height(14.dp))
+                }
+                SectionTitle("Alle Rezepte")
+                model.recipes.forEach { RecipeRow(model, it, false, onRecipe) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecipeRow(model: Model, r: KbRecipe, showCooked: Boolean, onRecipe: (KbRecipe) -> Unit) {
+    Box(Modifier.padding(bottom = 8.dp)) {
+        Panel(onClick = { onRecipe(r) }) {
+            T(r.title, Ty.Heading, maxLines = 1)
+            val pp = model.perPortion(r)
+            T("${fmt(pp.kcal)} kcal · ${fmtG(pp.p)} g Eiweiß pro Portion", Ty.Small, C.Muted, maxLines = 1)
+            if (showCooked && r.cookedAt > 0L) T(portionLine(model, r), Ty.Small, C.Mint, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun PortionsStep(model: Model, r: KbRecipe, onBack: () -> Unit, onDone: () -> Unit) {
+    val view = LocalView.current
+    var n by remember(r.id) { mutableStateOf("1") }
+    val portions = parseNum(n)
+    val ok = portions != null && portions > 0f && portions <= 20f
+    val k = if (ok) portions!! else 0f
+
+    val pp = model.perPortion(r)
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
+    ) {
+        TopRow(r.title, "Zurück", onBack)
+        T(
+            if (pp.kcal != r.kcal) "Werte pro Portion für deine ${model.cookedOf(r)} Portionen (im Kochbuch umgerechnet, geschätzt). Das Rezept ergibt ${r.servings} Portionen."
+            else "Werte pro Portion, vom Kochbuch geschätzt. Das Rezept ergibt ${r.servings} Portionen.",
+            Ty.Small, C.Muted,
+        )
+        if (r.cookedAt > 0L) T(portionLine(model, r), Ty.Small, C.Mint)
+        Spacer(Modifier.height(18.dp))
+        Field("Portionen", n, { n = it }, Modifier.fillMaxWidth(), suffix = "Portionen")
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("0,5", "1", "1,5", "2", "3").forEach { v -> Chip(v, selected = false) { n = v } }
+        }
+        Spacer(Modifier.height(20.dp))
+        Panel {
+            T(if (ok) "${fmt(pp.kcal * k)} kcal" else "–", Ty.Title)
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                T("Eiweiß ${if (ok) fmt(pp.p * k, 1) else "–"} g", Ty.Body, C.Prot)
+                T("KH ${if (ok) fmt(pp.c * k, 1) else "–"} g", Ty.Body, C.Carb)
+                T("Fett ${if (ok) fmt(pp.f * k, 1) else "–"} g", Ty.Body, C.Fat)
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        BigButton("Hinzufügen", enabled = ok) {
+            if (ok) {
+                if (model.settings.haptics) view.tickOn()
+                model.addRecipe(r, k)
+                onDone()
+            }
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -298,4 +431,20 @@ private fun FormStep(model: Model, food: Food?, onBack: () -> Unit, onSaved: (Lo
         }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+/** "4 gekocht · 1 gegessen · 3 übrig", dazu wann gekocht wurde. */
+private fun portionLine(model: Model, r: KbRecipe): String {
+    val cooked = model.cookedOf(r)
+    val eaten = model.eatenOf(r)
+    val left = model.leftOf(r)
+    val ago = System.currentTimeMillis() - r.cookedAt
+    val whenText = when {
+        ago < 3600_000L -> "gerade eben"
+        ago < 24 * 3600_000L -> "vor ${ago / 3600_000L} h"
+        else -> "vor ${ago / (24 * 3600_000L)} Tagen"
+    }
+    // Nach 3 Tagen zählen wir keine Reste mehr, dann nur noch "zuletzt gekocht"
+    if (ago >= 3 * 24 * 3600_000L) return "Zuletzt $whenText gekocht"
+    return "$cooked ${if (cooked == 1) "Portion" else "Portionen"} gekocht ($whenText) · ${fmtG(eaten)} gegessen · ${fmtG(left)} übrig"
 }

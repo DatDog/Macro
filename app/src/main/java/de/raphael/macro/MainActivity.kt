@@ -26,5 +26,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         model.refreshToday()
+        model.refreshHealthLocal()
+        model.refreshKochbuch()
     }
 }
