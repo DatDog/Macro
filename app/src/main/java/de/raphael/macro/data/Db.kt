@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import java.time.LocalDate
+import kotlin.math.abs
 
 /** Lebensmittel mit Werten je 100 g. [portion] = übliche Portion in Gramm (0 = keine). */
 data class Food(
@@ -161,6 +162,58 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applicationCon
 
     fun deleteEntry(id: Long) {
         writableDatabase.execSQL("DELETE FROM entry WHERE id = ?", arrayOf<Any>(id))
+    }
+
+
+    /** Alle Einträge ohne Zeitgrenze (für die Sicherung) */
+    fun allEntries(): List<Entry> = entries(LocalDate.of(2000, 1, 1))
+
+    /**
+     * Sicherung einlesen, nur ergänzend: Lebensmittel mit gleichem Namen und gleichen Werten und Einträge mit gleichem
+     * Tag, Zeitpunkt, Namen und gleicher Menge gibt es schon und werden übersprungen. Rückgabe: neue Lebensmittel, neue Einträge.
+     */
+    fun importBackup(foods: List<Food>, entries: List<Entry>): Pair<Int, Int> {
+        val db = writableDatabase
+        var nf = 0
+        var ne = 0
+        db.beginTransaction()
+        try {
+            val existing = foods()
+            val idMap = HashMap<Long, Long>()
+            for (f in foods) {
+                val same = existing.firstOrNull {
+                    it.name.equals(f.name, ignoreCase = true) && abs(it.kcal - f.kcal) < 0.01f && abs(it.p - f.p) < 0.01f &&
+                        abs(it.c - f.c) < 0.01f && abs(it.f - f.f) < 0.01f
+                }
+                if (same != null) {
+                    idMap[f.id] = same.id
+                    continue
+                }
+                db.execSQL(
+                    "INSERT INTO food(name, kcal, p, c, f, portion, fav, last_used, barcode) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf<Any?>(f.name, f.kcal, f.p, f.c, f.f, f.portion, if (f.fav) 1 else 0, f.lastUsed, f.barcode),
+                )
+                idMap[f.id] = lastId(db)
+                nf++
+            }
+            fun key(day: LocalDate, ts: Long, name: String, grams: Float) = "$day|$ts|$name|$grams"
+            val have = HashSet<String>()
+            allEntries().forEach { have.add(key(it.day, it.ts, it.name, it.grams)) }
+            for (e in entries) {
+                if (!have.add(key(e.day, e.ts, e.name, e.grams))) continue
+                // Rezept-Einträge behalten -1, gelöschte Lebensmittel bekommen 0 (gibt es nie)
+                val fid = if (e.foodId == RECIPE_FOOD_ID) RECIPE_FOOD_ID else (idMap[e.foodId] ?: 0L)
+                db.execSQL(
+                    "INSERT INTO entry(day, ts, food_id, name, grams, kcal, p, c, f) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf<Any>(e.day.toString(), e.ts, fid, e.name, e.grams, e.kcal, e.p, e.c, e.f),
+                )
+                ne++
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return nf to ne
     }
 
     companion object {

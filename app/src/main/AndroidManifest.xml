@@ -7,9 +7,12 @@
     <uses-permission android:name="com.example.healthlocal.permission.BRIDGE" />
     <!-- Rezepte mit Nährwerten lokal aus dem Kochbuch holen (ebenfalls nur mit gleichem Schlüssel). -->
     <uses-permission android:name="de.raphael.kochbuchzuhause.permission.BRIDGE" />
+    <!-- Mahlzeiten in Health Connect schreiben (nur auf dem Gerät, nur wenn du es unter Mehr einschaltest). -->
+    <uses-permission android:name="android.permission.health.WRITE_NUTRITION" />
     <queries>
         <provider android:authorities="com.example.healthlocal.bridge" />
         <provider android:authorities="de.raphael.kochbuchzuhause.bridge" />
+        <package android:name="com.google.android.apps.healthdata" />
     </queries>
 
     <application
@@ -30,5 +33,25 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Health Connect fragt hier nach, wofür Macro die Berechtigung braucht -->
+        <activity
+            android:name=".RationaleActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Macro">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".RationaleActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
     </application>
 </manifest>

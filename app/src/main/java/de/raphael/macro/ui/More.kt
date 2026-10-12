@@ -1,5 +1,7 @@
 package de.raphael.macro.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,9 +32,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.health.connect.client.PermissionController
+import de.raphael.macro.data.Backup
 import de.raphael.macro.data.Focus
+import de.raphael.macro.data.Hc
+import de.raphael.macro.data.HcState
 import de.raphael.macro.data.HlState
 import de.raphael.macro.data.Model
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
 @Composable
@@ -40,6 +50,15 @@ fun MoreScreen(model: Model) {
     val view = LocalView.current
     val s = model.settings
     val t = model.targets
+    val createBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) model.backupTo(uri)
+    }
+    val openBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) model.restoreFrom(uri)
+    }
+    val hcPermission = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) {
+        model.refreshHc()
+    }
 
     Column(
         Modifier
@@ -184,6 +203,90 @@ fun MoreScreen(model: Model) {
 
         Enter(4) {
             Column {
+                SectionTitle("Sicherung")
+                Panel(Modifier.fillMaxWidth()) {
+                    val last = model.lastBackup
+                    T(
+                        if (last <= 0L) "Noch keine Sicherung. Sichere deine Mahlzeiten und Lebensmittel regelmäßig, z. B. in dein Drive."
+                        else "Letzte Sicherung: " + LocalDateTime.ofInstant(Instant.ofEpochMilli(last), ZoneId.systemDefault())
+                            .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
+                        Ty.Small, if (last <= 0L) C.Fat else C.Muted,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    BigButton("Sicherung speichern") {
+                        if (s.haptics) view.tickOn()
+                        createBackup.launch(Backup.fileName())
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    BigButton("Sicherung einlesen", color = C.CardHi) { openBackup.launch(arrayOf("*/*")) }
+                    model.backupMsg?.let {
+                        Spacer(Modifier.height(10.dp))
+                        T(it, Ty.Small, if (it.contains("fehlgeschlagen")) C.Warn else C.Mint)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    T(
+                        "Die Datei enthält alle Lebensmittel, Einträge und Einstellungen und ist nicht verschlüsselt. Einlesen ergänzt nur, Vorhandenes bleibt. Einstellungen kommen nur zurück, wenn hier noch nichts eingetragen ist.",
+                        Ty.Label, C.Muted,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+
+        Enter(5) {
+            Column {
+                SectionTitle("Health Connect")
+                Panel(Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            T("Mahlzeiten schreiben", Ty.Body)
+                            T("Kalorien und Makros, nur auf dem Gerät", Ty.Small, C.Muted)
+                        }
+                        Switch(
+                            checked = s.toHC,
+                            onCheckedChange = { v ->
+                                model.setToHc(v)
+                                if (v && model.hcState == HcState.NO_PERMISSION) hcPermission.launch(Hc.PERMISSIONS)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = C.Accent,
+                                uncheckedThumbColor = C.Muted,
+                                uncheckedTrackColor = C.CardHi,
+                                uncheckedBorderColor = C.Line,
+                            ),
+                        )
+                    }
+                    if (s.toHC) {
+                        Spacer(Modifier.height(8.dp))
+                        T(
+                            when (model.hcState) {
+                                HcState.OK -> "Verbunden. Neue und geänderte Mahlzeiten werden geschrieben, gelöschte dort ebenfalls gelöscht."
+                                HcState.NO_PERMISSION -> "Die Berechtigung zum Schreiben von Ernährungsdaten fehlt."
+                                HcState.NOT_INSTALLED -> "Health Connect ist auf diesem Handy nicht verfügbar."
+                                HcState.NEEDS_UPDATE -> "Health Connect muss aktualisiert werden."
+                                HcState.ERROR -> "Health Connect hat nicht geantwortet. Später noch einmal versuchen."
+                                HcState.UNKNOWN -> "Noch nicht abgefragt."
+                            },
+                            Ty.Small, if (model.hcState == HcState.OK) C.Mint else C.Fat,
+                        )
+                        if (model.hcState == HcState.NO_PERMISSION) {
+                            Spacer(Modifier.height(10.dp))
+                            BigButton("Berechtigung erteilen") { hcPermission.launch(Hc.PERMISSIONS) }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    T(
+                        "Macro schreibt nur und liest nichts aus Health Connect. Rezepte gehen mit den Werten der gegessenen Portionen hinein. Beim Ausschalten bleibt, was schon geschrieben ist, in Health Connect.",
+                        Ty.Label, C.Muted,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+
+        Enter(6) {
+            Column {
                 SectionTitle("Allgemein")
                 Panel(Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -205,7 +308,7 @@ fun MoreScreen(model: Model) {
         }
         Spacer(Modifier.height(24.dp))
 
-        Enter(5) {
+        Enter(7) {
             Column {
                 SectionTitle("Hinweise")
                 T(
@@ -214,7 +317,7 @@ fun MoreScreen(model: Model) {
                 )
                 Spacer(Modifier.height(10.dp))
                 T(
-                    "Version 0.4 (Stufe 2). Neu: Rezepte aus dem Kochbuch. Noch nicht dabei: Sicherung, Health Connect, Barcode.",
+                    "Version 0.5 (Stufe 1b). Neu: Sicherung und Wiederherstellung, Mahlzeiten in Health Connect schreiben. Noch nicht dabei: Barcode.",
                     Ty.Small, C.Muted, Modifier.padding(horizontal = 4.dp),
                 )
             }

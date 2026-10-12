@@ -15,7 +15,7 @@ android {
         // Bei GitHub wird die Build-Nummer übergeben, damit jedes Update eine höhere Version hat
         val ci = (project.findProperty("ciVersionCode") as String?)?.toIntOrNull()
         versionCode = ci ?: 1
-        versionName = "0.4." + (ci ?: 0)
+        versionName = "0.5." + (ci ?: 0)
     }
 
     // Gleicher Schlüssel wie bei den anderen Apps (Secret KEYSTORE_B64) → Updates ohne Neuinstallation
@@ -59,4 +59,6 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+    // Mahlzeiten in Health Connect schreiben (nur auf dem Gerät)
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha10")
 }

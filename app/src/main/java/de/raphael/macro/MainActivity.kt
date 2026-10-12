@@ -28,5 +28,6 @@ class MainActivity : ComponentActivity() {
         model.refreshToday()
         model.refreshHealthLocal()
         model.refreshKochbuch()
+        model.refreshHc()
     }
 }

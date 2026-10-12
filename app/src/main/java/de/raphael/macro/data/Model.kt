@@ -1,6 +1,7 @@
 package de.raphael.macro.data
 
 import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -53,6 +54,14 @@ class Model(context: Context) {
         private set
     var kbState by mutableStateOf(KbState.UNKNOWN)
         private set
+    /** Health Connect (nur Schreiben): Stand der Verbindung */
+    var hcState by mutableStateOf(HcState.UNKNOWN)
+        private set
+    /** Zeitpunkt der letzten Sicherung (ms, 0 = noch nie) und Meldung zur letzten Sicherung/Wiederherstellung */
+    var lastBackup by mutableStateOf(Prefs.lastBackup(ctx))
+        private set
+    var backupMsg by mutableStateOf<String?>(null)
+        private set
 
     fun refreshToday() {
         val n = LocalDate.now()
@@ -69,6 +78,64 @@ class Model(context: Context) {
             if (v != null && r.state == HlState.OK) {
                 hl = v
                 Prefs.saveHl(ctx, v)
+            }
+        }
+    }
+
+    /** Prüft Health Connect (Installation, Berechtigung) und gleicht danach ab, wenn das Schreiben an ist. */
+    fun refreshHc() {
+        io.execute {
+            val st = Hc.state(ctx)
+            hcState = st
+            if (st == HcState.OK && settings.toHC && !Hc.sync(ctx, entries)) hcState = HcState.ERROR
+        }
+    }
+
+    /** Nach jeder Änderung an Einträgen: Health Connect nachziehen (im Hintergrund, nur wenn an und erlaubt). */
+    private fun hcSync() {
+        if (!settings.toHC || hcState != HcState.OK) return
+        val snap = entries
+        io.execute { if (!Hc.sync(ctx, snap)) hcState = HcState.ERROR }
+    }
+
+    fun setToHc(on: Boolean) {
+        update { it.copy(toHC = on) }
+        if (on) refreshHc()
+    }
+
+    /** Alles neu aus der Datenbank laden (nach dem Einlesen einer Sicherung). */
+    private fun reload() {
+        foods = db.foods()
+        entries = db.entries(LocalDate.now().minusDays(120))
+        settings = Prefs.load(ctx)
+    }
+
+    /** Sicherung in die vom Nutzer gewählte Datei schreiben (im Hintergrund). */
+    fun backupTo(uri: Uri) {
+        backupMsg = "Sicherung läuft …"
+        io.execute {
+            backupMsg = try {
+                Backup.write(ctx, uri)
+                lastBackup = Prefs.lastBackup(ctx)
+                "Sicherung gespeichert."
+            } catch (e: Exception) {
+                "Sicherung fehlgeschlagen: " + (e.message ?: "unbekannter Fehler")
+            }
+        }
+    }
+
+    /** Sicherung einlesen (ergänzt nur, Vorhandenes bleibt). */
+    fun restoreFrom(uri: Uri) {
+        backupMsg = "Einlesen läuft …"
+        io.execute {
+            backupMsg = try {
+                val r = Backup.read(ctx, uri)
+                reload()
+                hcSync()
+                "Eingelesen: ${r.foods} neue Lebensmittel, ${r.entries} neue Einträge" +
+                    (if (r.settings) ", Einstellungen übernommen." else ".")
+            } catch (e: Exception) {
+                "Einlesen fehlgeschlagen: " + (e.message ?: "unbekannter Fehler")
             }
         }
     }
@@ -112,6 +179,7 @@ class Model(context: Context) {
         val s = Sum(pp.kcal * portions, pp.p * portions, pp.c * portions, pp.f * portions)
         val id = db.addEntry(day, ts, RECIPE_FOOD_ID, r.title, portions, s.kcal, s.p, s.c, s.f)
         if (id > 0) entries = entries + Entry(id, day, ts, RECIPE_FOOD_ID, r.title, portions, s.kcal, s.p, s.c, s.f)
+        hcSync()
     }
 
     /** Einstellungen mit den Werten aus Health Local (wenn an und vorhanden), sonst die von Hand eingetragenen. */
@@ -152,6 +220,7 @@ class Model(context: Context) {
         if (id > 0) entries = entries + Entry(id, day, ts, food.id, food.name, grams, s.kcal, s.p, s.c, s.f)
         foods = foods.map { if (it.id == food.id) it.copy(lastUsed = ts) else it }
         io.execute { db.touch(food.id, ts) }
+        hcSync()
     }
 
     fun changeGrams(entry: Entry, grams: Float) {
@@ -161,11 +230,13 @@ class Model(context: Context) {
         val s = food?.sumFor(grams) ?: Sum(entry.kcal * k, entry.p * k, entry.c * k, entry.f * k)
         entries = entries.map { if (it.id == entry.id) it.copy(grams = grams, kcal = s.kcal, p = s.p, c = s.c, f = s.f) else it }
         io.execute { db.updateEntry(entry.id, grams, s.kcal, s.p, s.c, s.f) }
+        hcSync()
     }
 
     fun deleteEntry(id: Long) {
         entries = entries.filter { it.id != id }
-        io.execute { db.deleteEntry(id) }
+        io.execute { db.deleteEntry(id); Hc.markDeleted(ctx, id) }
+        hcSync()
     }
 
     fun addFood(name: String, kcal: Float, p: Float, c: Float, f: Float, portion: Float): Food? {

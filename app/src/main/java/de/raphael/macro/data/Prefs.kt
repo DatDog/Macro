@@ -29,6 +29,8 @@ data class Settings(
     val haptics: Boolean = true,
     /** Gewicht und Erhaltungskalorien aus Health Local übernehmen (wenn verfügbar) */
     val fromHL: Boolean = true,
+    /** Mahlzeiten in Health Connect schreiben (Standard aus, braucht die Berechtigung) */
+    val toHC: Boolean = false,
 ) {
     fun pctOf(f: Focus = focus): Int = pct[f] ?: f.pct
     fun protOf(f: Focus = focus): Float = prot[f] ?: f.prot
@@ -61,6 +63,7 @@ object Prefs {
             prot = Focus.values().associateWith { sp.getFloat("prot_${it.id}", it.prot) },
             haptics = sp.getBoolean("haptics", d.haptics),
             fromHL = sp.getBoolean("fromHL", d.fromHL),
+            toHC = sp.getBoolean("toHC", d.toHC),
         )
     }
 
@@ -80,6 +83,13 @@ object Prefs {
         e.apply()
     }
 
+    /** Zeitpunkt der letzten Sicherung (ms), 0 = noch nie */
+    fun lastBackup(ctx: Context): Long = ctx.getSharedPreferences(NAME, Context.MODE_PRIVATE).getLong("lastBackup", 0L)
+
+    fun saveLastBackup(ctx: Context, ts: Long) {
+        ctx.getSharedPreferences(NAME, Context.MODE_PRIVATE).edit().putLong("lastBackup", ts).apply()
+    }
+
     fun save(ctx: Context, s: Settings) {
         val e = ctx.getSharedPreferences(NAME, Context.MODE_PRIVATE).edit()
             .putString("focus", s.focus.id)
@@ -87,6 +97,7 @@ object Prefs {
             .putInt("maintenance", s.maintenance)
             .putBoolean("haptics", s.haptics)
             .putBoolean("fromHL", s.fromHL)
+            .putBoolean("toHC", s.toHC)
         Focus.values().forEach {
             e.putInt("pct_${it.id}", s.pctOf(it))
             e.putFloat("prot_${it.id}", s.protOf(it))
