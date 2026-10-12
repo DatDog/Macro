@@ -15,7 +15,7 @@ android {
         // Bei GitHub wird die Build-Nummer übergeben, damit jedes Update eine höhere Version hat
         val ci = (project.findProperty("ciVersionCode") as String?)?.toIntOrNull()
         versionCode = ci ?: 1
-        versionName = "0.5." + (ci ?: 0)
+        versionName = "0.6." + (ci ?: 0)
     }
 
     // Gleicher Schlüssel wie bei den anderen Apps (Secret KEYSTORE_B64) → Updates ohne Neuinstallation
@@ -61,4 +61,6 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     // Mahlzeiten in Health Connect schreiben (nur auf dem Gerät)
     implementation("androidx.health.connect:connect-client:1.1.0-alpha10")
+    // Barcode-Scanner von Google Play-Dienste (eigene Kamera-Oberfläche, keine Kamera-Berechtigung nötig)
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }

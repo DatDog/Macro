@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Macro nutzt kein Internet und sendet nichts. -->
+    <!-- Internet nur für die Barcode-Suche bei Open Food Facts (sendet nur die Barcode-Nummer, abschaltbar unter Mehr). -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Werte (Gewicht, Tagesverbrauch) lokal von Health Local abholen. Gilt nur, weil beide Apps mit demselben Schlüssel signiert sind. -->
     <uses-permission android:name="com.example.healthlocal.permission.BRIDGE" />

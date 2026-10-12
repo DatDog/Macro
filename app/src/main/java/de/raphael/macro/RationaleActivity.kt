@@ -42,7 +42,7 @@ class RationaleActivity : ComponentActivity() {
                     )
                     Spacer(Modifier.height(12.dp))
                     T(
-                        "Macro liest nichts aus Health Connect und sendet nichts ins Internet. Du kannst das Schreiben jederzeit " +
+                        "Macro liest nichts aus Health Connect, und die Mahlzeiten verlassen dein Handy nicht. Du kannst das Schreiben jederzeit " +
                             "unter Mehr in Macro ausschalten oder die Berechtigung in Health Connect entziehen.",
                         Ty.Body, C.Muted,
                     )

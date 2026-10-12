@@ -290,6 +290,24 @@ fun MoreScreen(model: Model) {
                 SectionTitle("Allgemein")
                 Panel(Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            T("Barcode online suchen", Ty.Body)
+                            T("Open Food Facts, sendet nur die Barcode-Nummer", Ty.Small, C.Muted)
+                        }
+                        Switch(
+                            checked = s.offOnline,
+                            onCheckedChange = { v -> model.update { it.copy(offOnline = v) } },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = C.Accent,
+                                uncheckedThumbColor = C.Muted,
+                                uncheckedTrackColor = C.CardHi,
+                                uncheckedBorderColor = C.Line,
+                            ),
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         T("Haptik", Ty.Body, modifier = Modifier.weight(1f))
                         Switch(
                             checked = s.haptics,
@@ -312,12 +330,12 @@ fun MoreScreen(model: Model) {
             Column {
                 SectionTitle("Hinweise")
                 T(
-                    "Macro ist eine Orientierung und keine Ernährungsberatung. Die Startwerte der Lebensmittel sind Richtwerte aus Standardtabellen, bitte gleiche sie mit deiner Packung ab. Alles bleibt auf deinem Handy, Macro nutzt kein Internet.",
+                    "Macro ist eine Orientierung und keine Ernährungsberatung. Die Startwerte der Lebensmittel sind Richtwerte aus Standardtabellen, bitte gleiche sie mit deiner Packung ab. Alles bleibt auf deinem Handy. Das Internet nutzt Macro nur für die Barcode-Suche bei Open Food Facts (nur die Nummer wird gesendet), sie ist oben abschaltbar. Die Daten dort stammen von Nutzern und können falsch sein.",
                     Ty.Small, C.Muted, Modifier.padding(horizontal = 4.dp),
                 )
                 Spacer(Modifier.height(10.dp))
                 T(
-                    "Version 0.5 (Stufe 1b). Neu: Sicherung und Wiederherstellung, Mahlzeiten in Health Connect schreiben. Noch nicht dabei: Barcode.",
+                    "Version 0.6 (Stufe 3). Neu: Barcode-Scanner mit Open Food Facts. Zuvor 0.5: Sicherung und Health Connect.",
                     Ty.Small, C.Muted, Modifier.padding(horizontal = 4.dp),
                 )
             }

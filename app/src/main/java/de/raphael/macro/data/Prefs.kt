@@ -31,6 +31,8 @@ data class Settings(
     val fromHL: Boolean = true,
     /** Mahlzeiten in Health Connect schreiben (Standard aus, braucht die Berechtigung) */
     val toHC: Boolean = false,
+    /** Beim Barcode-Scan Produktdaten bei Open Food Facts suchen (einzige Internetnutzung, nur die Nummer wird gesendet) */
+    val offOnline: Boolean = true,
 ) {
     fun pctOf(f: Focus = focus): Int = pct[f] ?: f.pct
     fun protOf(f: Focus = focus): Float = prot[f] ?: f.prot
@@ -64,6 +66,7 @@ object Prefs {
             haptics = sp.getBoolean("haptics", d.haptics),
             fromHL = sp.getBoolean("fromHL", d.fromHL),
             toHC = sp.getBoolean("toHC", d.toHC),
+            offOnline = sp.getBoolean("offOnline", d.offOnline),
         )
     }
 
@@ -98,6 +101,7 @@ object Prefs {
             .putBoolean("haptics", s.haptics)
             .putBoolean("fromHL", s.fromHL)
             .putBoolean("toHC", s.toHC)
+            .putBoolean("offOnline", s.offOnline)
         Focus.values().forEach {
             e.putInt("pct_${it.id}", s.pctOf(it))
             e.putFloat("prot_${it.id}", s.protOf(it))

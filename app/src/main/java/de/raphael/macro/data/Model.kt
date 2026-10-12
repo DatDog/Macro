@@ -239,10 +239,12 @@ class Model(context: Context) {
         hcSync()
     }
 
-    fun addFood(name: String, kcal: Float, p: Float, c: Float, f: Float, portion: Float): Food? {
-        val id = db.addFood(name, kcal, p, c, f, portion, null)
+    fun foodByBarcode(code: String): Food? = foods.firstOrNull { it.barcode == code }
+
+    fun addFood(name: String, kcal: Float, p: Float, c: Float, f: Float, portion: Float, barcode: String? = null): Food? {
+        val id = db.addFood(name, kcal, p, c, f, portion, barcode)
         if (id <= 0) return null
-        val food = Food(id, name, kcal, p, c, f, portion, false, 0L, null)
+        val food = Food(id, name, kcal, p, c, f, portion, false, 0L, barcode)
         foods = (foods + food).sortedBy { it.name.lowercase() }
         return food
     }

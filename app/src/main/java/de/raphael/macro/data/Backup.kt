@@ -32,6 +32,7 @@ object Backup {
             .put("haptics", s.haptics)
             .put("fromHL", s.fromHL)
             .put("toHC", s.toHC)
+            .put("offOnline", s.offOnline)
         val pct = JSONObject()
         val prot = JSONObject()
         Focus.values().forEach {
@@ -114,6 +115,7 @@ object Backup {
                 fromHL = so.optBoolean("fromHL", d.fromHL),
                 // Health Connect braucht auf dem Gerät eine eigene Zustimmung: nie aus der Sicherung einschalten
                 toHC = cur.toHC,
+                offOnline = so.optBoolean("offOnline", d.offOnline),
             )
             Prefs.save(ctx, s)
             restored = true

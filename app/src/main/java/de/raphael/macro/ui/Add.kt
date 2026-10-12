@@ -28,6 +28,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import de.raphael.macro.data.Draft
+import de.raphael.macro.data.Off
+import de.raphael.macro.data.OffResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
@@ -46,12 +55,30 @@ private sealed interface Step {
     data object Pick : Step
     data class Amount(val foodId: Long) : Step
     data class Portions(val recipeId: String) : Step
-    data class Form(val foodId: Long?) : Step
+    data class Form(val foodId: Long?, val draft: Draft? = null, val barcode: String? = null) : Step
+    data class Scan(val code: String) : Step
 }
 
 @Composable
 fun AddScreen(model: Model, onClose: () -> Unit) {
     var step by remember { mutableStateOf<Step>(Step.Pick) }
+    val ctx = LocalContext.current
+    var scanMsg by remember { mutableStateOf<String?>(null) }
+    // Barcode-Scanner der Play-Dienste: eigene Kamera-Oberfläche, die App braucht keine Kamera-Berechtigung
+    val startScan = {
+        scanMsg = null
+        val opts = GmsBarcodeScannerOptions.Builder()
+            .setBarcodeFormats(Barcode.FORMAT_EAN_13, Barcode.FORMAT_EAN_8, Barcode.FORMAT_UPC_A, Barcode.FORMAT_UPC_E)
+            .build()
+        GmsBarcodeScanning.getClient(ctx, opts).startScan()
+            .addOnSuccessListener { b -> b.rawValue?.let { step = Step.Scan(it) } }
+            .addOnFailureListener { e ->
+                // Abbruch durch den Nutzer ist kein Fehler
+                val m = e.message.orEmpty()
+                if (!m.contains("cancel", ignoreCase = true)) scanMsg = "Scanner nicht verfügbar: " + m.ifBlank { "Play-Dienste prüfen" }
+            }
+        Unit
+    }
     // Eine Ebene zurück, solange man nicht in der Auswahl ist (hat Vorrang vor dem Schließen)
     BackHandler(enabled = step !is Step.Pick) { step = Step.Pick }
 
@@ -72,6 +99,15 @@ fun AddScreen(model: Model, onClose: () -> Unit) {
                     onPick = { step = Step.Amount(it.id) },
                     onNew = { step = Step.Form(null) },
                     onRecipe = { step = Step.Portions(it.id) },
+                    onScan = startScan,
+                    scanMsg = scanMsg,
+                )
+                is Step.Scan -> ScanStep(
+                    model, st.code,
+                    onBack = { step = Step.Pick },
+                    onKnown = { step = Step.Amount(it.id) },
+                    onDraft = { d -> step = Step.Form(null, d, st.code) },
+                    onManual = { step = Step.Form(null, null, st.code) },
                 )
                 is Step.Portions -> {
                     val r = model.recipes.firstOrNull { it.id == st.recipeId }
@@ -93,7 +129,7 @@ fun AddScreen(model: Model, onClose: () -> Unit) {
                     }
                 }
                 is Step.Form -> FormStep(
-                    model, st.foodId?.let { model.foodById(it) },
+                    model, st.foodId?.let { model.foodById(it) }, st.draft, st.barcode,
                     onBack = { step = if (st.foodId != null) Step.Amount(st.foodId) else Step.Pick },
                     onSaved = { id -> step = Step.Amount(id) },
                     onDeleted = { step = Step.Pick },
@@ -121,6 +157,7 @@ private fun TopRow(title: String, backLabel: String, onBack: () -> Unit) {
 @Composable
 private fun PickStep(
     model: Model, onClose: () -> Unit, onPick: (Food) -> Unit, onNew: () -> Unit, onRecipe: (KbRecipe) -> Unit,
+    onScan: () -> Unit, scanMsg: String?,
 ) {
     val view = LocalView.current
     var query by remember { mutableStateOf("") }
@@ -181,8 +218,15 @@ private fun PickStep(
             Spacer(Modifier.height(12.dp))
         }
         if (tab == 0) {
+            if (scanMsg != null) {
+                Spacer(Modifier.height(8.dp))
+                T(scanMsg, Ty.Small, C.Warn)
+            }
             Spacer(Modifier.height(10.dp))
-            BigButton("Neues Lebensmittel", color = C.CardHi, onClick = onNew)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.weight(1f)) { BigButton("Barcode scannen", onClick = onScan) }
+                Box(Modifier.weight(1f)) { BigButton("Neu", color = C.CardHi, onClick = onNew) }
+            }
         }
         Spacer(Modifier.height(12.dp))
     }
@@ -357,14 +401,20 @@ private fun AmountStep(model: Model, food: Food, onBack: () -> Unit, onDone: () 
 }
 
 @Composable
-private fun FormStep(model: Model, food: Food?, onBack: () -> Unit, onSaved: (Long) -> Unit, onDeleted: () -> Unit) {
+private fun FormStep(
+    model: Model, food: Food?, draft: Draft?, barcode: String?,
+    onBack: () -> Unit, onSaved: (Long) -> Unit, onDeleted: () -> Unit,
+) {
     val view = LocalView.current
-    var name by remember(food?.id) { mutableStateOf(food?.name ?: "") }
-    var kcal by remember(food?.id) { mutableStateOf(food?.let { fmtG(it.kcal) } ?: "") }
-    var p by remember(food?.id) { mutableStateOf(food?.let { fmtG(it.p) } ?: "") }
-    var c by remember(food?.id) { mutableStateOf(food?.let { fmtG(it.c) } ?: "") }
-    var f by remember(food?.id) { mutableStateOf(food?.let { fmtG(it.f) } ?: "") }
-    var portion by remember(food?.id) { mutableStateOf(food?.let { if (it.portion > 0f) fmtG(it.portion) else "" } ?: "") }
+    fun opt(v: Float?) = if (v == null) "" else fmtG(v)
+    var name by remember(food?.id) { mutableStateOf(food?.name ?: draft?.name ?: "") }
+    var kcal by remember(food?.id) { mutableStateOf(food?.let { fmtG(it.kcal) } ?: opt(draft?.kcal)) }
+    var p by remember(food?.id) { mutableStateOf(food?.let { fmtG(it.p) } ?: opt(draft?.p)) }
+    var c by remember(food?.id) { mutableStateOf(food?.let { fmtG(it.c) } ?: opt(draft?.c)) }
+    var f by remember(food?.id) { mutableStateOf(food?.let { fmtG(it.f) } ?: opt(draft?.f)) }
+    var portion by remember(food?.id) {
+        mutableStateOf(food?.let { if (it.portion > 0f) fmtG(it.portion) else "" } ?: draft?.portion?.takeIf { it > 0f }?.let { fmtG(it) } ?: "")
+    }
     var confirmDelete by remember(food?.id) { mutableStateOf(false) }
 
     val vk = parseNum(kcal)
@@ -385,6 +435,18 @@ private fun FormStep(model: Model, food: Food?, onBack: () -> Unit, onSaved: (Lo
     ) {
         TopRow(if (food == null) "Neues Lebensmittel" else "Bearbeiten", "Zurück", onBack)
         T("Alle Werte je 100 g, wie auf der Packung.", Ty.Small, C.Muted)
+        if (food == null && barcode != null) {
+            Spacer(Modifier.height(6.dp))
+            T(
+                if (draft != null) "Von Open Food Facts geholt (Barcode $barcode). Bitte mit der Packung abgleichen, die Daten sind von Nutzern eingetragen und manchmal falsch. Getränke: Werte je 100 ml, die Menge gibst du später in ml als Gramm ein (1 ml ≈ 1 g)."
+                else "Barcode $barcode wird zum Lebensmittel gespeichert, damit der nächste Scan es sofort findet.",
+                Ty.Small, C.Mint,
+            )
+            if (draft != null && (draft.kcal == null)) {
+                Spacer(Modifier.height(4.dp))
+                T("Zu diesem Produkt fehlen Nährwerte. Bitte von der Packung eintragen.", Ty.Small, C.Fat)
+            }
+        }
         Spacer(Modifier.height(14.dp))
         Field("Name", name, { name = it }, Modifier.fillMaxWidth(), number = false)
         Spacer(Modifier.height(10.dp))
@@ -411,7 +473,7 @@ private fun FormStep(model: Model, food: Food?, onBack: () -> Unit, onSaved: (Lo
             if (ok && vk != null && vPortion != null) {
                 if (model.settings.haptics) view.tickOn()
                 if (food == null) {
-                    val nf = model.addFood(name.trim(), vk, vp, vc, vf, vPortion)
+                    val nf = model.addFood(name.trim(), vk, vp, vc, vf, vPortion, barcode)
                     if (nf != null) onSaved(nf.id)
                 } else {
                     model.editFood(food.id, name.trim(), vk, vp, vc, vf, vPortion)
@@ -447,4 +509,47 @@ private fun portionLine(model: Model, r: KbRecipe): String {
     // Nach 3 Tagen zählen wir keine Reste mehr, dann nur noch "zuletzt gekocht"
     if (ago >= 3 * 24 * 3600_000L) return "Zuletzt $whenText gekocht"
     return "$cooked ${if (cooked == 1) "Portion" else "Portionen"} gekocht ($whenText) · ${fmtG(eaten)} gegessen · ${fmtG(left)} übrig"
+}
+
+/**
+ * Nach dem Scan: erst im eigenen Bestand suchen (Barcode schon gespeichert → direkt zur Menge), sonst bei Open Food Facts
+ * (wenn unter Mehr erlaubt). Nichts wird automatisch eingetragen: das Ergebnis landet im Formular zur Prüfung.
+ */
+@Composable
+private fun ScanStep(
+    model: Model, code: String, onBack: () -> Unit, onKnown: (Food) -> Unit, onDraft: (Draft) -> Unit, onManual: () -> Unit,
+) {
+    var msg by remember(code) { mutableStateOf<String?>(null) }
+    var loading by remember(code) { mutableStateOf(true) }
+    val online = model.settings.offOnline
+    LaunchedEffect(code) {
+        val known = model.foodByBarcode(code)
+        if (known != null) {
+            onKnown(known)
+            return@LaunchedEffect
+        }
+        if (!online) {
+            loading = false
+            msg = "Dieser Barcode ist noch nicht gespeichert. Die Online-Suche ist unter Mehr ausgeschaltet."
+            return@LaunchedEffect
+        }
+        when (val r = withContext(Dispatchers.IO) { Off.lookup(code) }) {
+            is OffResult.Found -> onDraft(r.draft)
+            OffResult.NotFound -> { loading = false; msg = "Das Produkt ist bei Open Food Facts nicht eingetragen." }
+            is OffResult.Error -> { loading = false; msg = "Suche fehlgeschlagen: " + r.msg }
+        }
+    }
+    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+        TopRow("Barcode $code", "Zurück", onBack)
+        Spacer(Modifier.height(20.dp))
+        if (loading) {
+            T("Suche Produkt …", Ty.Body, C.Muted)
+        } else {
+            T(msg ?: "", Ty.Body, C.Fat)
+            Spacer(Modifier.height(20.dp))
+            BigButton("Von Hand anlegen", onClick = onManual)
+            Spacer(Modifier.height(10.dp))
+            BigButton("Zurück", color = C.CardHi, onClick = onBack)
+        }
+    }
 }
