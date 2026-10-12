@@ -22,6 +22,15 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,13 +51,14 @@ fun MacroApp(model: Model) {
     var tab by rememberSaveable { mutableStateOf(0) }
     var adding by rememberSaveable { mutableStateOf(false) }
     val view = LocalView.current
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
     BackHandler(enabled = adding) { adding = false }
 
     Scaffold(
         containerColor = C.Bg,
         contentColor = C.Text,
         bottomBar = {
-            if (!adding) {
+            if (!adding && !wide) {
                 BottomBar(tab) {
                     if (it != tab && model.settings.haptics) view.tickOff()
                     tab = it
@@ -56,7 +66,13 @@ fun MacroApp(model: Model) {
             }
         },
     ) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize()) {
+        Row(Modifier.padding(pad).fillMaxSize()) {
+        if (wide && !adding) SideRail(tab) {
+            if (it != tab && model.settings.haptics) view.tickOff()
+            tab = it
+        }
+        Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) {
             AnimatedContent(
                 targetState = tab,
                 transitionSpec = {
@@ -84,6 +100,31 @@ fun MacroApp(model: Model) {
                 AddScreen(model, onClose = { adding = false })
             }
         }
+        }
+        }
+    }
+}
+
+@Composable
+private fun SideRail(tab: Int, onTab: (Int) -> Unit) {
+    NavigationRail(containerColor = C.Bg, contentColor = C.Text) {
+        Spacer(Modifier.weight(1f))
+        listOf("Heute", "Verlauf", "Mehr").forEachIndexed { i, label ->
+            NavigationRailItem(
+                selected = tab == i,
+                onClick = { onTab(i) },
+                icon = { TabIcon(i) },
+                label = { T(label, Ty.Label, Color.Unspecified) },
+                colors = NavigationRailItemDefaults.colors(
+                    selectedIconColor = C.Accent,
+                    selectedTextColor = C.Accent,
+                    indicatorColor = C.CardHi,
+                    unselectedIconColor = C.Muted,
+                    unselectedTextColor = C.Muted,
+                ),
+            )
+        }
+        Spacer(Modifier.weight(1f))
     }
 }
 
