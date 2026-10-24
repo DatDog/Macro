@@ -1,9 +1,9 @@
 # Macro: Status
 
-## AKTUELL 2026-10-24: Aufraeumen (Zweig review, nicht auf main)
+## AKTUELL 2026-10-24: Aufraeumen (Zweig review, am 2026-10-24 nach main gemerged und per Release veroeffentlicht)
 - Zweig review (von main): eingebautes Kotlin (AGP 9; Plugin org.jetbrains.kotlin.android, kotlinOptions und die Opt-outs android.builtInKotlin/newDsl=false entfernt), Workflow mit paths-ignore fuer Doku, concurrency pro Zweig, retention-days 3 und Testlauf (assembleRelease test).
 - Unit-Tests (JUnit 4, reine JVM): 12 Tests: Prefs.targets (alle Foki, eigene Prozente/Eiweiss, Kohlenhydrate nie negativ), Sum.plus, Food.sumFor. testImplementation junit:junit:4.13.2. Compiler-Warnung in Add.kt (immer wahre Bedingung) behoben.
-- CI auf review gruen fuer den Stand ohne die neuen Tests (2026-10-24); Bau mit Tests folgt beim naechsten Push. NICHT veroeffentlicht: Release nur nach ausdruecklicher Freigabe im Chat (R9).
+- CI auf review gruen (Bau 2026-10-24, mit Tests). Nutzer hat die Veroeffentlichung am 2026-10-24 freigegeben (go im Chat). Am Geraet noch nicht getestet.
 - Lokal bauen (PC mit Android SDK, JDK 21): C:\Users\rapha\apps\gb.ps1 <App> assembleDebug test. Der Windows-PATH darf keine Leerzeichen enthalten (Tailscale), das Skript setzt einen sauberen PATH.
 
 
