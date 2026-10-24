@@ -3,7 +3,16 @@ name: App bauen
 on:
   push:
     branches: ['**', '!backup']   # Zweige werden nur zur Prüfung gebaut, veröffentlicht wird nur main; backup wird nie gebaut
+    # Reine Doku-Pushes bauen nicht (ersetzt [skip ci])
+    paths-ignore:
+      - '**.md'
   workflow_dispatch:
+
+# Pro Zweig nur ein Lauf: Auf Nebenzweigen bricht ein neuer Push den alten Lauf ab,
+# auf main wartet ein neuer Lauf, bis der alte fertig ist (Releases nie gleichzeitig).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   APP_NAME: Macro   # Name der APK-Datei und des Releases
@@ -143,6 +152,7 @@ jobs:
         with:
           name: ${{ env.APP_NAME }}-${{ github.run_number }}
           path: ${{ env.APP_NAME }}.apk
+          retention-days: 3
 
       # Bei einem wiederverwendeten Bau trägt das Release dessen Nummer (passt zu versionName/versionCode in der APK)
       - name: Release veröffentlichen
