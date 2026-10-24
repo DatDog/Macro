@@ -470,7 +470,7 @@ private fun FormStep(
         }
         Spacer(Modifier.height(20.dp))
         BigButton("Speichern", enabled = ok) {
-            if (ok && vk != null && vPortion != null) {
+            if (ok) {
                 if (model.settings.haptics) view.tickOn()
                 if (food == null) {
                     val nf = model.addFood(name.trim(), vk, vp, vc, vf, vPortion, barcode)
