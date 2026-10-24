@@ -128,12 +128,12 @@ jobs:
             echo "::notice title=Signatur::Kein Schlüssel (Secret fehlt oder ist leer)"
           fi
 
-      - name: APK bauen
+      - name: APK bauen und testen
         if: ${{ steps.reuse.outputs.hit != 'true' }}
         run: |
           chmod +x gradlew
           set -o pipefail
-          ./gradlew assembleRelease -PciVersionCode=$((100 + ${{ github.run_number }})) 2>&1 | tee build.log
+          ./gradlew assembleRelease test -PciVersionCode=$((100 + ${{ github.run_number }})) 2>&1 | tee build.log
 
       # Fehler als Hinweis am Bau anzeigen (lesbar ohne Log-Download)
       - name: Fehler zusammenfassen
