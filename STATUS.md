@@ -1,6 +1,6 @@
 # Macro: Status
 
-## AKTUELL 2026-10-28: Widgets (Zweig feature/widgets, lokal, NICHT veroeffentlicht)
+## AKTUELL 2026-10-28: Widgets (Zweig feature/widgets nach main gemerged und per Release veroeffentlicht; Freigabe Raphael im Chat)
 - Zwei Glance-Widgets (widget/MacroWidgets.kt): Tag 4x2 (Ring Kalorien, Balken Eiweiss/Kohlenhydrate/Fett) und Kalorien 2x2 (uebrig oder drueber, Eiweiss-Rest). Daten direkt aus Db und Prefs (Ziele wie Model.effective), Auffrischen ueber MacroWidgets.refresh nach Eintraegen, Zielaenderung, Health-Local-Abgleich und in onResume. Logik in data/WidgetLogic.kt (+3 Tests, insgesamt 15). Debug: PinActivity (adb shell am start -n de.raphael.macro/.debug.PinActivity --es w tag|kcal). Im Emulator kb_pixel geprueft (normal, ueber Ziel). Testdaten: %TEMP%\macro_seed.py leer|mid|voll.
 
 ## AKTUELL 2026-10-28: Fold-Layout (im Emulator kb_fold geprueft, Freigabe Raphael im Chat, veroeffentlicht; Upload-Schritt mit continue-on-error wegen Artefakt-Limit)
