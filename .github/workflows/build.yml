@@ -53,6 +53,27 @@ jobs:
             exit 1
           fi
 
+      # Release-Name = Versionsname aus app/build.gradle.kts (z. B. 0.71 oder 0.71.1 für einen Fix), von Hand gepflegt.
+      # Auf main wird abgebrochen, wenn es dieses Release schon gibt (sonst würde ein altes überschrieben).
+      - name: Versionsnummer lesen und prüfen
+        id: ver
+        env:
+          REF: ${{ github.ref }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          VER=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -1)
+          if ! printf '%s' "$VER" | grep -qE '^[0-9]+(\.[0-9]+)*$'; then
+            echo "::error title=Version::Kein gültiger versionName in app/build.gradle.kts"
+            exit 1
+          fi
+          echo "name=$VER" >> "$GITHUB_OUTPUT"
+          if [ "$REF" = "refs/heads/main" ] && [ "$EVENT" = "push" ]; then
+            if gh release view "v$VER" > /dev/null 2>&1; then
+              echo "::error title=Version vergeben::Das Release v$VER gibt es schon. Bitte versionName in app/build.gradle.kts hochsetzen (z. B. auf 0.NN.1 für einen Fix) und neu pushen."
+              exit 1
+            fi
+          fi
+
       # Auf main: Gibt es zu genau diesem Stand schon einen grünen Bau von einem anderen Zweig (z. B. feat)?
       # Dann wird dessen APK veröffentlicht, ohne neu zu bauen. Sonst (oder bei jedem Fehler hier) wird normal gebaut.
       - name: Fertigen Bau von einem Zweig suchen
@@ -67,8 +88,11 @@ jobs:
           if [ -z "$RUN" ]; then echo "Kein fertiger Bau zu diesem Stand, es wird gebaut."; exit 0; fi
           NUM=$(jq -r --argjson id "$RUN" '.[] | select(.databaseId == $id) | .number' runs.json)
           # Versionsnummern dürfen nie rückwärts laufen (sonst lässt sich das Update nicht installieren)
-          LAST=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // "v0"' | tr -d 'v')
-          if [ "$NUM" -le "${LAST:-0}" ]; then echo "Bau $NUM ist nicht neuer als Release v$LAST, es wird gebaut."; exit 0; fi
+          # (Baunummer des letzten Release steht im Release-Text als "Bau N"; ältere Releases hatten sie als Tag v<N>)
+          LASTTAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // "v0"')
+          LAST=$(gh release view "$LASTTAG" --json body --jq .body | grep -oP '^Bau \K[0-9]+' | tail -1 || true)
+          if [ -z "$LAST" ]; then LAST=$(printf '%s' "$LASTTAG" | grep -oP '^v\K[0-9]+$' || echo 0); fi
+          if [ "$NUM" -le "${LAST:-0}" ]; then echo "Bau $NUM ist nicht neuer als der letzte Release-Bau $LAST, es wird gebaut."; exit 0; fi
           mkdir -p reuse
           gh run download "$RUN" -n "$APP_NAME-$NUM" -D reuse
           if [ -f "reuse/$APP_NAME.apk" ]; then
@@ -147,8 +171,8 @@ jobs:
         run: cp app/build/outputs/apk/release/app-release.apk $APP_NAME.apk
 
       - name: APK als Download am Bau ablegen
-        if: ${{ steps.reuse.outputs.hit != 'true' }}
-        # Das Release nimmt die APK aus dem Arbeitsordner; ein voller Artefakt-Speicher darf den Bau nicht stoppen
+        if: ${{ steps.reuse.outputs.hit != 'true' && github.ref != 'refs/heads/main' }}
+        # Nur auf Zweigen (main nutzt nur die Datei im Arbeitsordner und braucht keinen Artefakt-Speicher); ein voller Speicher darf den Bau nicht stoppen
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -156,12 +180,19 @@ jobs:
           path: ${{ env.APP_NAME }}.apk
           retention-days: 3
 
-      # Bei einem wiederverwendeten Bau trägt das Release dessen Nummer (passt zu versionName/versionCode in der APK)
+      - name: Release-Text schreiben
+        if: ${{ env.HAS_KEY == 'true' && github.ref == 'refs/heads/main' }}
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+          BUILD: ${{ steps.reuse.outputs.num || github.run_number }}
+        run: printf '%s\n\nBau %s\n' "$MSG" "$BUILD" > release-body.md
+
+      # Tag und Titel = versionName; im Text steht "Bau N" (N = Laufnummer, versionCode = 100 + N; bei wiederverwendetem Bau dessen Nummer)
       - name: Release veröffentlichen
         if: ${{ env.HAS_KEY == 'true' && github.ref == 'refs/heads/main' }}
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: v${{ steps.reuse.outputs.num || github.run_number }}
-          name: ${{ env.APP_NAME }} ${{ steps.reuse.outputs.num || github.run_number }}
-          body: ${{ github.event.head_commit.message }}
+          tag_name: v${{ steps.ver.outputs.name }}
+          name: ${{ env.APP_NAME }} ${{ steps.ver.outputs.name }}
+          body_path: release-body.md
           files: ${{ env.APP_NAME }}.apk
