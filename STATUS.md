@@ -1,5 +1,10 @@
 # Macro: Status
 
+## AKTUELL 2026-10-28: Fold-Layout (im Emulator kb_fold geprueft, Freigabe Raphael im Chat, veroeffentlicht; Upload-Schritt mit continue-on-error wegen Artefakt-Limit)
+- Aufgeklappt (Inhaltsbreite ab 640 dp): Heute = links Ziele und Hinzufuegen, rechts "Heute gegessen"; Verlauf = links Kennzahlen und Diagramm, rechts die Tage; Mehr = links Fokus, persoenliche Werte, Ziele, rechts Sicherung, Health Connect, Allgemein, Hinweise. Jede Spalte scrollt fuer sich. Schmal unveraendert.
+- App.kt: Inhaltsbreite auf 1100 dp, AddScreen bleibt auf 760 dp begrenzt. More.kt: Abschnitte in eine Map ausgelagert (Reihenfolge schmal 1 bis 7). Version noch nicht erhoeht (Pflicht vor dem Release).
+- Bau und 12 Unit-Tests gruen (gb.ps1 Macro assembleDebug test).
+
 ## AKTUELL 2026-10-24: Aufraeumen (Zweig review, am 2026-10-24 nach main gemerged und per Release veroeffentlicht)
 - Zweig review (von main): eingebautes Kotlin (AGP 9; Plugin org.jetbrains.kotlin.android, kotlinOptions und die Opt-outs android.builtInKotlin/newDsl=false entfernt), Workflow mit paths-ignore fuer Doku, concurrency pro Zweig, retention-days 3 und Testlauf (assembleRelease test).
 - Unit-Tests (JUnit 4, reine JVM): 12 Tests: Prefs.targets (alle Foki, eigene Prozente/Eiweiss, Kohlenhydrate nie negativ), Sum.plus, Food.sumFor. testImplementation junit:junit:4.13.2. Compiler-Warnung in Add.kt (immer wahre Bedingung) behoben.

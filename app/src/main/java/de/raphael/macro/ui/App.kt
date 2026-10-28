@@ -72,7 +72,7 @@ fun MacroApp(model: Model) {
             tab = it
         }
         Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
-        Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) {
+        Box(Modifier.widthIn(max = 1100.dp).fillMaxSize()) {
             AnimatedContent(
                 targetState = tab,
                 transitionSpec = {
@@ -97,7 +97,9 @@ fun MacroApp(model: Model) {
                 enter = slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(240)),
                 exit = slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it / 3 } + fadeOut(tween(180)),
             ) {
-                AddScreen(model, onClose = { adding = false })
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                    Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) { AddScreen(model, onClose = { adding = false }) }
+                }
             }
         }
         }

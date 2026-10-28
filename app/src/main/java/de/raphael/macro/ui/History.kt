@@ -3,6 +3,8 @@ package de.raphael.macro.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,12 +36,7 @@ fun HistoryScreen(model: Model) {
     val avgProt = if (week.isEmpty()) null else week.map { model.totalOf(it).p }.average().toFloat()
     val protHits = if (t == null) null else week.count { model.totalOf(it).p >= t.protein * 0.95f }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-    ) {
+    val top: @Composable () -> Unit = {
         Spacer(Modifier.height(20.dp))
         Enter(0) { T("Verlauf", Ty.Title) }
         Spacer(Modifier.height(16.dp))
@@ -76,7 +73,8 @@ fun HistoryScreen(model: Model) {
                 if (t != null) T("Linie = Ziel für den aktuellen Fokus", Ty.Label, C.Muted)
             }
         }
-        Spacer(Modifier.height(24.dp))
+    }
+    val daysList: @Composable () -> Unit = {
         Enter(3) { SectionTitle("Tage") }
         days.reversed().forEach { d ->
             val sum = model.totalOf(d)
@@ -100,6 +98,28 @@ fun HistoryScreen(model: Model) {
             T("Noch keine Einträge. Sobald du Mahlzeiten einträgst, erscheinen hier deine Tage.", Ty.Body, C.Muted)
         }
         Spacer(Modifier.height(24.dp))
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth >= 640.dp) {
+            // Aufgeklappt: links Kennzahlen und Diagramm, rechts die Tage, jede Spalte scrollt für sich
+            Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    top()
+                    Spacer(Modifier.height(24.dp))
+                }
+                Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    Spacer(Modifier.height(20.dp))
+                    daysList()
+                }
+            }
+        } else {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+                top()
+                Spacer(Modifier.height(24.dp))
+                daysList()
+            }
+        }
     }
 }
 

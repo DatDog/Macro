@@ -8,6 +8,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -55,12 +57,7 @@ fun TodayScreen(model: Model, onAdd: () -> Unit, onSetup: () -> Unit) {
     val t = model.targets
     var openId by remember { mutableStateOf(-1L) }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-    ) {
+    val top: @Composable () -> Unit = {
         Spacer(Modifier.height(20.dp))
         Enter(0) { Header(today) }
         Spacer(Modifier.height(14.dp))
@@ -81,8 +78,8 @@ fun TodayScreen(model: Model, onAdd: () -> Unit, onSetup: () -> Unit) {
         Enter(2) { Hero(total, t, s.focus, onSetup) }
         Spacer(Modifier.height(14.dp))
         Enter(3) { BigButton("Mahlzeit hinzufügen", onClick = onAdd) }
-        Spacer(Modifier.height(26.dp))
-
+    }
+    val eaten: @Composable () -> Unit = {
         Enter(4) { SectionTitle("Heute gegessen") }
         if (list.isEmpty()) {
             T("Noch nichts eingetragen.", Ty.Body, C.Muted, Modifier.padding(start = 4.dp))
@@ -93,6 +90,33 @@ fun TodayScreen(model: Model, onAdd: () -> Unit, onSetup: () -> Unit) {
             }
         }
         Spacer(Modifier.height(24.dp))
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth >= 640.dp) {
+            // Aufgeklappt: links Ziele und Hinzufügen, rechts die Liste, jede Spalte scrollt für sich
+            Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    top()
+                    Spacer(Modifier.height(24.dp))
+                }
+                Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    Spacer(Modifier.height(20.dp))
+                    eaten()
+                }
+            }
+        } else {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+            ) {
+                top()
+                Spacer(Modifier.height(26.dp))
+                eaten()
+            }
+        }
     }
 }
 
