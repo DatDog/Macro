@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dunkler Hintergrund für Widgets: Nachtblau mit einem violetten und einem mintfarbenen Lichtfleck -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:startColor="#FF15151D"
+                android:endColor="#FF0B0B10" />
+        </shape>
+    </item>
+    <item
+        android:width="240dp"
+        android:height="240dp"
+        android:gravity="top|end"
+        android:top="-90dp"
+        android:right="-80dp">
+        <shape android:shape="oval">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="120dp"
+                android:centerColor="#228E7CFF"
+                android:endColor="#008E7CFF"
+                android:startColor="#388E7CFF" />
+        </shape>
+    </item>
+    <item
+        android:width="200dp"
+        android:height="200dp"
+        android:gravity="bottom|start"
+        android:bottom="-80dp"
+        android:left="-60dp">
+        <shape android:shape="oval">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="100dp"
+                android:centerColor="#1E4DE3C1"
+                android:endColor="#004DE3C1"
+                android:startColor="#324DE3C1" />
+        </shape>
+    </item>
+</layer-list>

@@ -61,5 +61,7 @@ dependencies {
     implementation("androidx.health.connect:connect-client:1.1.0-alpha10")
     // Barcode-Scanner von Google Play-Dienste (eigene Kamera-Oberfläche, keine Kamera-Berechtigung nötig)
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    // Startbildschirm-Widgets
+    implementation("androidx.glance:glance-appwidget:1.1.1")
     testImplementation("junit:junit:4.13.2")
 }

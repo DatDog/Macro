@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Macro</string>
+    <string name="widget_tag_desc">Kalorien als Ring und Eiweiß, Kohlenhydrate und Fett des Tages</string>
+    <string name="widget_kcal_desc">Wie viele Kalorien heute noch übrig sind, dazu das fehlende Eiweiß</string>
 </resources>

@@ -78,6 +78,7 @@ class Model(context: Context) {
             if (v != null && r.state == HlState.OK) {
                 hl = v
                 Prefs.saveHl(ctx, v)
+                widgetsRefresh()
             }
         }
     }
@@ -92,6 +93,9 @@ class Model(context: Context) {
     }
 
     /** Nach jeder Änderung an Einträgen: Health Connect nachziehen (im Hintergrund, nur wenn an und erlaubt). */
+    /** Startbildschirm-Widgets auf den neuen Stand bringen. */
+    private fun widgetsRefresh() = de.raphael.macro.widget.MacroWidgets.refresh(ctx)
+
     private fun hcSync() {
         if (!settings.toHC || hcState != HcState.OK) return
         val snap = entries
@@ -108,6 +112,7 @@ class Model(context: Context) {
         foods = db.foods()
         entries = db.entries(LocalDate.now().minusDays(120))
         settings = Prefs.load(ctx)
+        widgetsRefresh()
     }
 
     /** Sicherung in die vom Nutzer gewählte Datei schreiben (im Hintergrund). */
@@ -180,6 +185,7 @@ class Model(context: Context) {
         val id = db.addEntry(day, ts, RECIPE_FOOD_ID, r.title, portions, s.kcal, s.p, s.c, s.f)
         if (id > 0) entries = entries + Entry(id, day, ts, RECIPE_FOOD_ID, r.title, portions, s.kcal, s.p, s.c, s.f)
         hcSync()
+        widgetsRefresh()
     }
 
     /** Einstellungen mit den Werten aus Health Local (wenn an und vorhanden), sonst die von Hand eingetragenen. */
@@ -196,7 +202,7 @@ class Model(context: Context) {
     fun update(f: (Settings) -> Settings) {
         val s = f(settings)
         settings = s
-        io.execute { Prefs.save(ctx, s) }
+        io.execute { Prefs.save(ctx, s); widgetsRefresh() }
     }
 
     val targets: Targets? get() = Prefs.targets(effective)
@@ -221,6 +227,7 @@ class Model(context: Context) {
         foods = foods.map { if (it.id == food.id) it.copy(lastUsed = ts) else it }
         io.execute { db.touch(food.id, ts) }
         hcSync()
+        widgetsRefresh()
     }
 
     fun changeGrams(entry: Entry, grams: Float) {
@@ -229,13 +236,13 @@ class Model(context: Context) {
         val k = if (entry.grams > 0f) grams / entry.grams else 1f
         val s = food?.sumFor(grams) ?: Sum(entry.kcal * k, entry.p * k, entry.c * k, entry.f * k)
         entries = entries.map { if (it.id == entry.id) it.copy(grams = grams, kcal = s.kcal, p = s.p, c = s.c, f = s.f) else it }
-        io.execute { db.updateEntry(entry.id, grams, s.kcal, s.p, s.c, s.f) }
+        io.execute { db.updateEntry(entry.id, grams, s.kcal, s.p, s.c, s.f); widgetsRefresh() }
         hcSync()
     }
 
     fun deleteEntry(id: Long) {
         entries = entries.filter { it.id != id }
-        io.execute { db.deleteEntry(id); Hc.markDeleted(ctx, id) }
+        io.execute { db.deleteEntry(id); Hc.markDeleted(ctx, id); widgetsRefresh() }
         hcSync()
     }
 

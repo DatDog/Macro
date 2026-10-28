@@ -29,5 +29,6 @@ class MainActivity : ComponentActivity() {
         model.refreshHealthLocal()
         model.refreshKochbuch()
         model.refreshHc()
+        de.raphael.macro.widget.MacroWidgets.refresh(this)
     }
 }

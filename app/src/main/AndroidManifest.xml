@@ -54,5 +54,28 @@
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
             </intent-filter>
         </activity-alias>
+        <!-- Startbildschirm-Widgets: Tag (Ring und Makros) und Kalorien (klein) -->
+        <receiver
+            android:name=".widget.TagWidgetReceiver"
+            android:exported="true"
+            android:label="Macro · Tag">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tag_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.KcalWidgetReceiver"
+            android:exported="true"
+            android:label="Macro · Kalorien">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/kcal_widget_info" />
+        </receiver>
     </application>
 </manifest>
